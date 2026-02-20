@@ -8,6 +8,7 @@ import CurrentSubject from '@/components/main/CurrentSubject';
 import ChatInterface from '@/components/main/ChatInterface';
 import MeetingControls from '@/components/main/MeetingControls';
 import Memo from '@/components/main/Memo';
+import MeetingSummary from '@/components/main/MeetingSummary';
 import SummaryModal from '@/components/main/SummaryModal';
 import { isAuthenticated, logout } from '@/lib/auth';
 import { meetingApi, subjectApi } from '@/lib/api';
@@ -27,7 +28,7 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
     const [currentSubject, setCurrentSubject] = useState<any>(null);
     const [suggestedSubjects, setSuggestedSubjects] = useState<string[]>([]);
     const [chatId, setChatId] = useState<number | null>(null);
-    const [activeTab, setActiveTab] = useState<'chat' | 'memo'>('chat');
+    const [activeTab, setActiveTab] = useState<'chat' | 'memo' | 'summary'>('chat');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [summaryText, setSummaryText] = useState<string>('');
     const [showSummaryModal, setShowSummaryModal] = useState(false);
@@ -345,7 +346,19 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
-                                    회의 메모
+                                    会议 메모
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('summary')}
+                                    className={`flex-1 flex items-center justify-center py-2.5 rounded-2xl text-sm font-bold transition-all ${activeTab === 'summary'
+                                        ? 'bg-[var(--accent-primary)] text-white shadow-lg'
+                                        : 'text-[var(--foreground)] opacity-40 hover:opacity-100'
+                                        }`}
+                                >
+                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    회의 요약
                                 </button>
                             </div>
 
@@ -356,10 +369,15 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                                         chatId={chatId}
                                         isMeetingActive={!!currentMeeting && !currentMeeting.endedAt}
                                     />
-                                ) : (
+                                ) : activeTab === 'memo' ? (
                                     <Memo
                                         meetingId={currentMeeting?.meetingId || null}
                                         onContentChange={setCurrentMemo}
+                                    />
+                                ) : (
+                                    <MeetingSummary
+                                        summary={currentMeeting?.summary}
+                                        isLoading={isLoading}
                                     />
                                 )}
                             </div>
