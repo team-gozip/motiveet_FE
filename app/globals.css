@@ -1,0 +1,150 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  /* Light Theme - Slightly darker for comfort */
+  --background: #f1f5f9;
+  /* Slate-100: Replaces white to reduce eye strain */
+  --foreground: #0f172a;
+  /* Slate-900 */
+  --card-bg: #ffffff;
+  /* Cards stand out on the darker background */
+  --border-color: #e2e8f0;
+  /* Slate-200 */
+  --header-bg: #ffffff;
+  --sidebar-bg: #f8fafc;
+  /* Slightly different from main background */
+  --accent-primary: #334155;
+  /* Deep Slate */
+  --highlight-bg: #eef3f5;
+  /* Cloud Blue point */
+}
+
+.dark {
+  /* Dark Theme - VS Code Style Neutral Charcoal */
+  --background: #121212;
+  /* Deep neutral gray, similar to VS Code dark mode */
+  --foreground: #e4e4e7;
+  /* Zinc-200 */
+  --card-bg: #1e1e1e;
+  /* Slightly lighter gray for elements */
+  --border-color: #2d2d2d;
+  /* Clean, logical border */
+  --header-bg: #121212;
+  --sidebar-bg: #121212;
+  --accent-primary: #a1a1aa;
+  /* Zinc-400: Neutral accent */
+  --highlight-bg: #2d2d30;
+  /* VS Code item highlight / hover color */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card-bg);
+  --color-border-custom: var(--border-color);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Custom utilities */
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* Markdown Preview Corrections */
+.markdown-preview h1 {
+  font-size: 1.875rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  color: var(--foreground);
+}
+
+.markdown-preview h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--foreground);
+}
+
+.markdown-preview h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: var(--foreground);
+}
+
+.markdown-preview p {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.markdown-preview ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.markdown-preview ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.markdown-preview li {
+  margin-bottom: 0.25rem;
+}
+
+.markdown-preview strong {
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+/* Red for bold */
+.markdown-preview em {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.markdown-preview hr {
+  border: 0;
+  border-top: 1px solid var(--border-color);
+  margin: 2rem 0;
+}
+
+.markdown-preview blockquote {
+  border-left: 4px solid var(--accent-primary);
+  padding-left: 1rem;
+  font-style: italic;
+  opacity: 0.7;
+}
