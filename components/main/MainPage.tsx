@@ -240,7 +240,7 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                     <div className="flex items-center space-x-2">
                         <Link href="/" className="flex items-center space-x-2 group">
                             <img
-                                src={theme === 'dark' ? '/white_logo2.png' : '/dark_logo2.png'}
+                                src={theme === 'dark' ? '/dark_logo2.png' : '/white_logo2.png'}
                                 alt="Motiveet"
                                 className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
                             />
@@ -296,13 +296,6 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                 <div className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-80' : 'w-0'} overflow-hidden border-r border-[var(--border-color)]`}>
                     <Sidebar
                         onMeetingSelect={handleMeetingSelect}
-                        onSubjectSelect={(subject) => {
-                            console.log('Subject selected:', subject);
-                            setCurrentSubject(subject);
-                            if (subject.chatId) {
-                                setChatId(subject.chatId);
-                            }
-                        }}
                         refreshTrigger={sidebarRefreshKey}
                     />
                 </div>
@@ -315,6 +308,7 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                             <CurrentSubject
                                 subject={currentSubject}
                                 meetingId={currentMeeting?.meetingId || null}
+                                meetingTitle={currentMeeting?.title}
                                 isActive={!!currentMeeting && !currentMeeting.endedAt}
                                 suggestions={suggestedSubjects}
                                 summary={currentSubject?.summary}
@@ -329,7 +323,7 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                         </div>
 
                         {/* Interactive Area: Chat or Memo */}
-                        <div className="bg-[var(--card-bg)] rounded-3xl shadow-2xl overflow-hidden border border-[var(--border-color)] transition-colors duration-300 flex flex-col h-[600px]">
+                        <div className="bg-[var(--card-bg)] rounded-3xl overflow-hidden border border-2 border-[#A9A9A9] transition-colors duration-300 flex flex-col h-[600px]">
                             {/* Tab Switcher */}
                             <div className="flex border-b border-[var(--border-color)] bg-[var(--background)] p-1.5 space-x-1">
                                 <button

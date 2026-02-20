@@ -17,10 +17,13 @@ export default function LandingPage() {
                     <div className="inline-block px-4 py-1.5 mb-8 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 text-xs font-bold tracking-widest uppercase animate-fade-in">
                         AI-Powered Meeting Assistant
                     </div>
-                    <h1 className="text-6xl md:text-8xl font-black tracking-tighter mb-8 leading-[1.1] animate-slide-up">
-                        Focus on the <span className="text-indigo-600 italic">Conversation,</span><br />
-                        Let AI Handle the <span className="underline decoration-indigo-500/30 decoration-8 underline-offset-8">Details.</span>
-                    </h1>
+                    <div className="mb-8 animate-slide-up">
+                        <img
+                            src={theme === 'dark' ? "/white_baner.png" : "/dark_baner.png"}
+                            alt="Motiveet Banner"
+                            className="max-w-full h-auto mx-auto"
+                        />
+                    </div>
                     <p className="text-xl text-[var(--foreground)] opacity-50 max-w-2xl mx-auto mb-12 leading-relaxed animate-slide-up animation-delay-200">
                         회의의 흐름을 놓치지 마세요. Motiveet이 실시간으로 대화를 기록하고,<br />
                         핵심 주제를 요약하며, 다음 액션 아이템까지 완벽하게 정리해 드립니다.

@@ -21,6 +21,7 @@ interface FileData {
 interface CurrentSubjectProps {
     subject: Subject | null;
     meetingId: number | null;
+    meetingTitle?: string;
     isActive: boolean;
     suggestions?: string[];
     summary?: string;
@@ -29,7 +30,7 @@ interface CurrentSubjectProps {
     onResearch?: (topic: string) => void;
 }
 
-export default function CurrentSubject({ subject, meetingId, isActive, suggestions = [], summary, files, onSubjectChange, onResearch }: CurrentSubjectProps) {
+export default function CurrentSubject({ subject, meetingId, meetingTitle, isActive, suggestions = [], summary, files, onSubjectChange, onResearch }: CurrentSubjectProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editText, setEditText] = useState('');
     const [showSummary, setShowSummary] = useState(false);
@@ -181,7 +182,7 @@ export default function CurrentSubject({ subject, meetingId, isActive, suggestio
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-2">
                             <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-                            <h2 className="text-xs text-white/70 uppercase tracking-widest">Live Topic</h2>
+                            <h2 className="text-xs text-white/70 uppercase tracking-widest">{meetingTitle || '회의'}</h2>
                         </div>
                         <button
                             onClick={handleEditToggle}

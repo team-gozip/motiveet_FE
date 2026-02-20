@@ -243,10 +243,11 @@ export const subjectApi = {
         });
     },
 
-    getHistory: async (cursor?: number, limit: number = 10) => {
+    getHistory: async (cursor?: number, limit: number = 10, meetingId?: number) => {
         const params = new URLSearchParams();
         if (cursor) params.append('cursor', String(cursor));
         params.append('limit', String(limit));
+        if (meetingId) params.append('meeting_id', String(meetingId));
         return apiCall<{
             subjects: Array<{
                 subjectId: number;

@@ -11,7 +11,7 @@ export default function AuthHeader() {
             <div className="px-6 h-16 flex items-center justify-between">
                 <Link href="/" className="flex items-center space-x-2 group">
                     <img
-                        src={theme === 'dark' ? '/white_logo2.png' : '/dark_logo2.png'}
+                        src={theme === 'dark' ? '/dark_logo2.png' : '/white_logo2.png'}
                         alt="Motiveet"
                         className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
                     />

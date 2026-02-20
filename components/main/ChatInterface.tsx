@@ -172,12 +172,12 @@ const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
                     >
                         <div
                             className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-2 rounded-2xl shadow-sm ${message.role === 'user'
-                                ? 'bg-[var(--accent-primary)] text-[#1a1a1a]'
-                                : 'bg-white dark:bg-[var(--highlight-bg)] text-[#1a1a1a] dark:text-[var(--foreground)] border border-zinc-200 dark:border-[var(--border-color)] shadow-sm'
+                                ? 'bg-[var(--accent-primary)] text-[#1A1A1A]'
+                                : 'bg-white dark:bg-[var(--highlight-bg)] text-black dark:text-[#E5E7EB] border border-zinc-200 dark:border-[var(--border-color)] shadow-sm'
                                 }`}
                         >
                             {message.text && (
-                                <div className="text-sm prose dark:prose-invert prose-slate max-w-none prose-p:leading-relaxed prose-a:text-indigo-500 hover:prose-a:underline [&_*]:text-inherit">
+                                <div className="text-sm prose dark:prose-invert prose-slate max-w-none prose-p:leading-relaxed prose-a:text-indigo-500 hover:prose-a:underline [&_*]:text-inherit font-medium">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                         {message.text}
                                     </ReactMarkdown>
@@ -191,7 +191,7 @@ const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
                                 />
                             )}
                             <p
-                                className={`text-[10px] mt-1 font-medium ${message.role === 'user' ? 'text-[#1a1a1a]/70' : 'text-zinc-500 dark:text-[var(--foreground)]/40'
+                                className={`text-[10px] mt-1 font-medium ${message.role === 'user' ? 'text-[#1A1A1A]' : 'text-zinc-600 dark:text-[var(--foreground)]/40'
                                     }`}
                             >
                                 {toKST(message.timestamp)}
