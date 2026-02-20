@@ -36,19 +36,15 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
     try {
       const current = await meetingApi.getCurrent();
       if (current && !current.endedAt) {
-        // If there's a meeting running on server but we don't have local recorder,
-        // we unfortunately can't "resume" recording seamlessly without browser permission again.
-        // However, we can at least set the state to "active" UI-wise.
-        // Re-acquiring microphone might need user gesture, so we might skip auto-start recording here
-        // unless we prompt user.
-        // For this Hackathon/MVP: we assume "start" happens in this session. 
-        // If page refresh happens, we might lose the *recorder* instance.
-        // TODO: Handle page refresh persistence better if needed.
-        setActiveMeetingId(current.meetingId);
-        setActiveChatId(current.chatId);
+        // User requested to automatically end meetings that were left open
+        await meetingApi.end(current.meetingId);
+        console.log(`Automatically ended meeting ${current.meetingId} that was left active.`);
       }
+      // Ensure state is clean
+      setActiveMeetingId(null);
+      setActiveChatId(null);
     } catch (e) {
-      console.error("Failed to check active meeting:", e);
+      // Quietly handle initial check (e.g. not logged in)
     }
   };
 

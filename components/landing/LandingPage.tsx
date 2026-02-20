@@ -19,7 +19,7 @@ export default function LandingPage() {
                     </div>
                     <div className="mb-8 animate-slide-up">
                         <img
-                            src={theme === 'dark' ? "/white_baner.png" : "/dark_baner.png"}
+                            src={theme === 'dark' ? "/dark_baner.png" : "/white_baner.png"}
                             alt="Motiveet Banner"
                             className="max-w-full h-auto mx-auto"
                         />

@@ -5,6 +5,7 @@ import { chatApi } from '@/lib/api';
 import Button from '../common/Button';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useTheme } from '../common/ThemeProvider';
 
 // SQLite func.now()는 UTC를 반환하지만 Z가 없어서 JS가 로컬로 해석함
 // UTC로 강제 인식시킨 뒤 KST로 변환
@@ -28,6 +29,7 @@ interface ChatInterfaceProps {
 
 const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
     const { chatId, isMeetingActive } = props;
+    const { theme } = useTheme();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -173,7 +175,7 @@ const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
                         <div
                             className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-2 rounded-2xl shadow-sm ${message.role === 'user'
                                 ? 'bg-[var(--accent-primary)] text-[#1A1A1A]'
-                                : 'bg-white dark:bg-[var(--highlight-bg)] text-black dark:text-[#E5E7EB] border border-zinc-200 dark:border-[var(--border-color)] shadow-sm'
+                                : `bg-white dark:bg-[var(--highlight-bg)] ${theme === 'dark' ? 'text-[#E5E7EB]' : 'text-black'} border border-zinc-200 dark:border-[var(--border-color)] shadow-sm`
                                 }`}
                         >
                             {message.text && (
@@ -191,7 +193,7 @@ const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
                                 />
                             )}
                             <p
-                                className={`text-[10px] mt-1 font-medium ${message.role === 'user' ? 'text-[#1A1A1A]' : 'text-zinc-600 dark:text-[var(--foreground)]/40'
+                                className={`text-[10px] mt-1 font-medium ${message.role === 'user' ? 'text-[#1A1A1A]' : theme === 'dark' ? 'text-[var(--foreground)]/40' : 'text-zinc-600'
                                     }`}
                             >
                                 {toKST(message.timestamp)}
