@@ -34,6 +34,7 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
     const [showSummaryModal, setShowSummaryModal] = useState(false);
     const [currentMemo, setCurrentMemo] = useState('');
     const chatRef = useRef<any>(null);
+    const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
     useEffect(() => {
         // Check authentication
@@ -101,6 +102,8 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
 
     const loadCurrentMeeting = async () => {
         setIsLoading(true);
+        // Refresh sidebar on initial load or re-check
+        setSidebarRefreshKey(prev => prev + 1);
         try {
             const meeting = await meetingApi.getCurrent();
             if (meeting) {
@@ -123,11 +126,15 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
     };
 
     const handleMeetingStart = (meetingId: number, newChatId: number) => {
+        // Refresh sidebar list to show new meeting
+        setSidebarRefreshKey(prev => prev + 1);
         // Navigate to the meeting page
         router.push(`/meeting/${meetingId}`);
     };
 
     const handleMeetingEnd = (summary?: string) => {
+        // Refresh sidebar list to update status
+        setSidebarRefreshKey(prev => prev + 1);
         if (summary) {
             setSummaryText(summary);
             setShowSummaryModal(true);
@@ -169,17 +176,17 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
     const handleSubjectUpdate = (response: any) => {
         console.log('[MainPage] Subject response update:', response);
         if (response.subject) {
-            const updatedSubject = { ...response.subject };
-            if (response.summary) {
-                updatedSubject.summary = response.summary;
-            }
-            // Update current subject
-            setCurrentSubject(updatedSubject);
+            // const updatedSubject = { ...response.subject };
+            // if (response.summary) {
+            //     updatedSubject.summary = response.summary;
+            // }
+            // Update current subject -> DISABLED to keep user's manual subject
+            // setCurrentSubject(updatedSubject);
 
             // If the subject has its own chatId, update it
-            if (updatedSubject.chatId) {
-                // setChatId(updatedSubject.chatId); // Disable auto-switch
-            }
+            // if (updatedSubject.chatId) {
+            //    setChatId(updatedSubject.chatId); // Disable auto-switch
+            // }
         }
 
         // Handle suggestions/topics
@@ -296,6 +303,7 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                                 setChatId(subject.chatId);
                             }
                         }}
+                        refreshTrigger={sidebarRefreshKey}
                     />
                 </div>
 
@@ -346,7 +354,7 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
-                                    会议 메모
+                                    메모
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('summary')}

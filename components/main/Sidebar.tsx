@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react';
 import { meetingApi, subjectApi } from '@/lib/api';
 import { useMeeting } from '@/components/providers/MeetingProvider';
 
+// SQLite func.now()는 UTC를 반환하지만 Z가 없어서 JS가 로컬로 해석함
+const toKSTFull = (timestamp: string) => {
+    const ts = timestamp.endsWith('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z';
+    return new Date(ts).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+};
+
 interface Meeting {
     meetingId: number;
     title: string;
@@ -23,9 +29,10 @@ interface Subject {
 interface SidebarProps {
     onMeetingSelect?: (meetingId: number) => void;
     onSubjectSelect?: (subject: Subject) => void;
+    refreshTrigger?: number;
 }
 
-export default function Sidebar({ onMeetingSelect, onSubjectSelect }: SidebarProps) {
+export default function Sidebar({ onMeetingSelect, onSubjectSelect, refreshTrigger }: SidebarProps) {
     const { activeMeetingId } = useMeeting();
     const [activeTab, setActiveTab] = useState<'meetings' | 'subjects'>('meetings');
     const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -36,7 +43,7 @@ export default function Sidebar({ onMeetingSelect, onSubjectSelect }: SidebarPro
 
     useEffect(() => {
         loadData();
-    }, [activeTab]);
+    }, [activeTab, refreshTrigger, activeMeetingId]);
 
     const loadData = async () => {
         if (isLoading || !hasMore) return;
@@ -138,7 +145,7 @@ export default function Sidebar({ onMeetingSelect, onSubjectSelect }: SidebarPro
                                     {meeting.title || `회의 #${meeting.meetingId}`}
                                 </h3>
                                 <p className="text-[10px] text-[var(--foreground)] opacity-40 mt-1 font-medium">
-                                    {new Date(meeting.startedAt).toLocaleString('ko-KR')}
+                                    {toKSTFull(meeting.startedAt)}
                                 </p>
                                 {meeting.endedAt && (
                                     <span className="inline-block mt-2 px-2 py-0.5 text-[10px] font-bold bg-[var(--highlight-bg)] text-[var(--accent-primary)] opacity-70 rounded border border-[var(--border-color)] uppercase">
@@ -175,7 +182,7 @@ export default function Sidebar({ onMeetingSelect, onSubjectSelect }: SidebarPro
                                     {subject.text}
                                 </p>
                                 <p className="text-[10px] text-[var(--foreground)] opacity-40 mt-1 font-medium">
-                                    {new Date(subject.createdAt).toLocaleString('ko-KR')}
+                                    {toKSTFull(subject.createdAt)}
                                 </p>
                                 {/* 삭제 버튼 */}
                                 <button

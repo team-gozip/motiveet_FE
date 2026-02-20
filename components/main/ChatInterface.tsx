@@ -6,6 +6,13 @@ import Button from '../common/Button';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+// SQLite func.now()는 UTC를 반환하지만 Z가 없어서 JS가 로컬로 해석함
+// UTC로 강제 인식시킨 뒤 KST로 변환
+const toKST = (timestamp: string) => {
+    const ts = timestamp.endsWith('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z';
+    return new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' });
+};
+
 interface ChatMessage {
     messageId: number;
     role: 'user' | 'assistant';
@@ -166,11 +173,11 @@ const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
                         <div
                             className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-2 rounded-2xl shadow-sm ${message.role === 'user'
                                 ? 'bg-[var(--accent-primary)] text-[#1a1a1a]'
-                                : 'bg-[var(--highlight-bg)] text-[var(--foreground)] border border-[var(--border-color)]'
+                                : 'bg-white dark:bg-[var(--highlight-bg)] text-[#1a1a1a] dark:text-[var(--foreground)] border border-zinc-200 dark:border-[var(--border-color)] shadow-sm'
                                 }`}
                         >
                             {message.text && (
-                                <div className="text-sm prose dark:prose-invert prose-slate max-w-none prose-p:leading-relaxed prose-a:text-indigo-500 hover:prose-a:underline">
+                                <div className="text-sm prose dark:prose-invert prose-slate max-w-none prose-p:leading-relaxed prose-a:text-indigo-500 hover:prose-a:underline [&_*]:text-inherit">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                         {message.text}
                                     </ReactMarkdown>
@@ -184,10 +191,10 @@ const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
                                 />
                             )}
                             <p
-                                className={`text-[10px] mt-1 font-medium ${message.role === 'user' ? 'text-[#1a1a1a]' : 'text-[var(--foreground)] opacity-30'
+                                className={`text-[10px] mt-1 font-medium ${message.role === 'user' ? 'text-[#1a1a1a]/70' : 'text-zinc-500 dark:text-[var(--foreground)]/40'
                                     }`}
                             >
-                                {new Date(message.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                {toKST(message.timestamp)}
                             </p>
                         </div>
                     </div>
