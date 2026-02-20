@@ -3,6 +3,24 @@
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getAccessToken } from '@/lib/api';
+
+// JWT payload에서 username(sub)을 추출하는 헬퍼
+const getUsernameFromToken = (): string | null => {
+    const token = getAccessToken();
+    if (!token) return null;
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.sub || null;
+    } catch {
+        return null;
+    }
+};
+
+const getMemoKey = (meetingId: number): string => {
+    const username = getUsernameFromToken();
+    return `memo_${username || 'unknown'}_${meetingId}`;
+};
 
 interface MemoProps {
     meetingId: number | null;
@@ -20,7 +38,7 @@ export default function Memo({ meetingId, onContentChange }: MemoProps) {
             if (onContentChange) onContentChange('');
             return;
         }
-        const savedMemo = localStorage.getItem(`meeting_memo_${meetingId}`);
+        const savedMemo = localStorage.getItem(getMemoKey(meetingId));
         const initialContent = savedMemo || '';
         setContent(initialContent);
         if (onContentChange) {
@@ -38,7 +56,7 @@ export default function Memo({ meetingId, onContentChange }: MemoProps) {
         }
 
         if (meetingId) {
-            localStorage.setItem(`meeting_memo_${meetingId}`, newContent);
+            localStorage.setItem(getMemoKey(meetingId), newContent);
         }
     };
 

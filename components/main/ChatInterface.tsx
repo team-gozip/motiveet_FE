@@ -179,8 +179,22 @@ const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
                                 }`}
                         >
                             {message.text && (
-                                <div className="text-sm prose dark:prose-invert prose-slate max-w-none prose-p:leading-relaxed prose-a:text-indigo-500 hover:prose-a:underline [&_*]:text-inherit font-medium">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                <div className="text-sm prose dark:prose-invert prose-slate max-w-none prose-p:leading-relaxed font-medium">
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                            a: ({ href, children }) => (
+                                                <a
+                                                    href={href}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-indigo-500 underline cursor-pointer hover:text-indigo-400"
+                                                >
+                                                    {children}
+                                                </a>
+                                            ),
+                                        }}
+                                    >
                                         {message.text}
                                     </ReactMarkdown>
                                 </div>
