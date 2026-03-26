@@ -43,7 +43,12 @@ export default function LoginForm() {
                 router.push('/meeting');
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : '로그인에 실패했습니다.');
+            const errorMessage = err instanceof Error ? err.message : '로그인에 실패했습니다.';
+            if (errorMessage === 'INVALID_CREDENTIALS') {
+                setError('비밀번호 혹은 아이디가 다릅니다.');
+            } else {
+                setError(errorMessage);
+            }
         } finally {
             setIsLoading(false);
         }

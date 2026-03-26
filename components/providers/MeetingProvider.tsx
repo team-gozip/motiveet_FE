@@ -25,6 +25,7 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
   const [lastAnalysisResult, setLastAnalysisResult] = useState<any>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -67,6 +68,7 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
       // Audio Context for Volume
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -116,7 +118,9 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
         if (recorder.state === 'recording') {
           recorder.stop();
           setTimeout(() => {
-            if (recorder.state === 'inactive') recorder.start();
+            if (recorder.state === 'inactive' && activeMeetingIdRef.current) {
+                try { recorder.start(); } catch(e) {}
+            }
           }, 200);
         }
       }, 30000);
@@ -128,19 +132,32 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const stopRecordingCleanup = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
     }
+
+    if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+    }
+
+    if (mediaRecorderRef.current) {
+      if (mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      if (mediaRecorderRef.current.stream) {
+          mediaRecorderRef.current.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+      }
+    }
+    
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    if (audioContextRef.current) audioContextRef.current.close();
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
 
     mediaRecorderRef.current = null;
     audioContextRef.current = null;
     analyserRef.current = null;
     animationFrameRef.current = null;
-    intervalRef.current = null;
     setVolume(0);
     setIsRecording(false);
   };
