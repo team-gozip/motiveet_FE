@@ -63,7 +63,7 @@ export default function CurrentSubject({ subject, meetingId, meetingTitle, isAct
             setIsEditing(false);
         } catch (error) {
             console.error('Failed to update subject:', error);
-            alert('주제 수정에 실패했습니다.');
+            console.error('주제 수정에 실패했습니다.');
         }
     };
 
@@ -83,7 +83,7 @@ export default function CurrentSubject({ subject, meetingId, meetingTitle, isAct
             }
         } catch (error) {
             console.error('Failed to create subject:', error);
-            alert('주제 생성에 실패했습니다.');
+            console.error('주제 생성에 실패했습니다.');
         } finally {
             setIsCreating(false);
         }
@@ -144,7 +144,7 @@ export default function CurrentSubject({ subject, meetingId, meetingTitle, isAct
 
                 {/* AI Extracted Topics - also shown when subject is null */}
                 {suggestions.length > 0 && (
-                    <div className="bg-[#0f172a]/30 dark:bg-black/20 rounded-2xl border border-[var(--border-color)] p-6 shadow-sm backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <div className="bg-[var(--highlight-bg)]/50 dark:bg-black/20 rounded-2xl border border-[var(--border-color)] p-6 shadow-sm backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className="flex items-center justify-between mb-4 ml-1">
                             <h3 className="text-[10px] font-bold text-[var(--foreground)] opacity-30 uppercase tracking-[0.2em] flex items-center">
                                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2 animate-pulse"></span>
@@ -280,7 +280,7 @@ export default function CurrentSubject({ subject, meetingId, meetingTitle, isAct
                                 href={file.fileUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center p-4 bg-[var(--background)] hover:bg-[#EEF3F5] dark:hover:bg-[#1e293b] rounded-xl transition-all border border-[var(--border-color)] hover:border-[#cbd5e1] group"
+                                className="flex items-center p-4 bg-[var(--background)] hover:bg-[var(--highlight-bg)] rounded-xl transition-all border border-[var(--border-color)] group"
                             >
                                 <div className="flex-shrink-0 w-11 h-11 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg className="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

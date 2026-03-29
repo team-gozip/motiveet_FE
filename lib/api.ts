@@ -327,3 +327,77 @@ export const chatApi = {
         });
     },
 };
+
+// ── Folder API ──────────────────────────────────────────────────
+
+export const folderApi = {
+    list: async (cursor?: number, limit = 20) => {
+        const params = new URLSearchParams();
+        if (cursor) params.append('cursor', String(cursor));
+        params.append('limit', String(limit));
+        return apiCall<{
+            items: Array<{ folderId: number; name: string; description: string | null; createdAt: string }>;
+            nextCursor: number | null;
+        }>(`/folders?${params}`);
+    },
+
+    create: async (name: string, description?: string) => {
+        return apiCall<{ folderId: number; name: string; description: string | null; createdAt: string }>('/folders', {
+            method: 'POST',
+            body: JSON.stringify({ name, description: description || null }),
+        });
+    },
+};
+
+// ── Room API ────────────────────────────────────────────────────
+
+export const roomApi = {
+    list: async (folderId: number, cursor?: number, limit = 20) => {
+        const params = new URLSearchParams();
+        if (cursor) params.append('cursor', String(cursor));
+        params.append('limit', String(limit));
+        return apiCall<{
+            items: Array<{
+                roomId: number;
+                name: string;
+                type: 'ONLINE' | 'OFFLINE';
+                status: 'WAITING' | 'ACTIVE' | 'ENDED';
+                createdAt: string;
+            }>;
+            nextCursor: number | null;
+        }>(`/folders/${folderId}/rooms?${params}`);
+    },
+
+    create: async (folderId: number, name: string, type: 'ONLINE' | 'OFFLINE') => {
+        return apiCall<{
+            roomId: number;
+            folderId: number;
+            name: string;
+            type: 'ONLINE' | 'OFFLINE';
+            status: string;
+            createdAt: string;
+        }>('/rooms', {
+            method: 'POST',
+            body: JSON.stringify({ folderId, name, type }),
+        });
+    },
+
+    join: async (roomId: number) => {
+        return apiCall<{ roomId: number; role: string }>(`/rooms/${roomId}/join`, {
+            method: 'POST',
+        });
+    },
+
+    leave: async (roomId: number) => {
+        return apiCall<{ message: string }>(`/rooms/${roomId}/leave`, {
+            method: 'POST',
+        });
+    },
+
+    updateNotes: async (roomId: number, content: string) => {
+        return apiCall<{ roomId: number; content: string; updatedAt: string }>(`/rooms/${roomId}/notes`, {
+            method: 'PUT',
+            body: JSON.stringify({ content }),
+        });
+    },
+};

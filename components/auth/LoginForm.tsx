@@ -40,7 +40,7 @@ export default function LoginForm() {
 
             if (response.success) {
                 setTokens(response.accessToken, response.refreshToken);
-                router.push('/meeting');
+                router.push('/choose');
             }
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : '로그인에 실패했습니다.';

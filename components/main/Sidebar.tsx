@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react';
 import { meetingApi } from '@/lib/api';
 import { useMeeting } from '@/components/providers/MeetingProvider';
 
-// SQLite func.now()는 UTC를 반환하지만 Z가 없어서 JS가 로컬로 해석함
-const toKSTFull = (timestamp: string) => {
-    const ts = timestamp.endsWith('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z';
-    return new Date(ts).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+const toKST = (ts: string) => {
+    const d = new Date(ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z');
+    return {
+        date: d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' }),
+        time: d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul' }),
+    };
 };
 
 interface Meeting {
@@ -19,107 +21,135 @@ interface Meeting {
 
 interface SidebarProps {
     onMeetingSelect?: (meetingId: number) => void;
+    activeMeetingId?: number | null;
     refreshTrigger?: number;
 }
 
-export default function Sidebar({ onMeetingSelect, refreshTrigger }: SidebarProps) {
-    const { activeMeetingId } = useMeeting();
+export default function Sidebar({ onMeetingSelect, activeMeetingId: selectedMeetingId, refreshTrigger }: SidebarProps) {
+    const { activeMeetingId: recordingMeetingId } = useMeeting();
     const [meetings, setMeetings] = useState<Meeting[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [cursor, setCursor] = useState<number | null>(null);
-    const [hasMore, setHasMore] = useState(true);
 
     useEffect(() => {
-        setMeetings([]);
-        setCursor(null);
-        setHasMore(true);
-        loadFreshData();
-    }, [refreshTrigger, activeMeetingId]);
+        loadMeetings();
+    }, [refreshTrigger, recordingMeetingId]);
 
-    const loadFreshData = async () => {
+    const loadMeetings = async () => {
         setIsLoading(true);
         try {
-            const response = await meetingApi.getHistory(undefined, 20);
-            setMeetings(response.meetings);
-            setCursor(response.nextCursor);
-            setHasMore(response.nextCursor !== null);
-        } catch (error) {
-            console.error('Failed to load meetings:', error);
-        } finally {
-            setIsLoading(false);
-        }
+            const resp = await meetingApi.getHistory(undefined, 30);
+            setMeetings(resp.meetings);
+        } catch { }
+        finally { setIsLoading(false); }
     };
 
-    const handleDeleteMeeting = async (e: React.MouseEvent, meetingId: number) => {
+    const handleDelete = async (e: React.MouseEvent, meetingId: number) => {
         e.stopPropagation();
-        const meeting = meetings.find(m => m.meetingId === meetingId);
-        if (meeting && !meeting.endedAt) {
-            alert('현재 진행 중인 회의는 삭제할 수 없습니다. 먼저 회의를 종료해 주세요.');
-            return;
-        }
-        if (!confirm('이 회의를 삭제하시겠습니까?')) return;
-
+        const m = meetings.find(m => m.meetingId === meetingId);
+        if (!m?.endedAt) return;
+        if (!window.confirm('이 회의를 삭제하시겠습니까?')) return;
         try {
             await meetingApi.delete(meetingId);
             setMeetings(prev => prev.filter(m => m.meetingId !== meetingId));
-        } catch (error) {
-            console.error('Failed to delete meeting:', error);
-            alert('회의 삭제에 실패했습니다.');
-        }
+        } catch { }
     };
 
+    // Group by date
+    const grouped: Record<string, Meeting[]> = {};
+    for (const m of meetings) {
+        const { date } = toKST(m.startedAt);
+        if (!grouped[date]) grouped[date] = [];
+        grouped[date].push(m);
+    }
+
     return (
-        <div className="h-full bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] flex flex-col transition-colors duration-300">
+        <div className="h-full flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-color)]">
             {/* Header */}
-            <div className="flex border-b border-[var(--border-color)] bg-[var(--background)]">
-                <div className="flex-1 px-4 py-3 text-xs font-bold uppercase tracking-wider text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)] bg-[var(--highlight-bg)]">
-                    회의 목록
-                </div>
+            <div className="flex-shrink-0 h-12 flex items-center px-4 border-b border-[var(--border-color)]">
+                <span className="text-[11px] font-semibold text-[var(--foreground)] opacity-40 uppercase tracking-wider">
+                    회의 기록
+                </span>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                {meetings.map((meeting) => (
-                    <div
-                        key={meeting.meetingId}
-                        className="relative group w-full text-left p-4 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-[var(--accent-primary)]/30 hover:bg-[var(--highlight-bg)]/30 transition-all cursor-pointer"
-                        onClick={() => onMeetingSelect?.(meeting.meetingId)}
-                    >
-                        <h3 className="font-bold text-sm text-[var(--foreground)] truncate pr-8">
-                            {meeting.title || `회의 #${meeting.meetingId}`}
-                        </h3>
-                        <p className="text-[10px] text-[var(--foreground)] opacity-40 mt-1 font-medium">
-                            {toKSTFull(meeting.startedAt)}
-                        </p>
-                        {meeting.endedAt && (
-                            <span className="inline-block mt-2 px-2 py-0.5 text-[10px] font-bold bg-[var(--highlight-bg)] text-[var(--accent-primary)] opacity-70 rounded border border-[var(--border-color)] uppercase">
-                                종료됨
-                            </span>
-                        )}
-                        {activeMeetingId === meeting.meetingId && !meeting.endedAt && (
-                            <span className="inline-block mt-2 ml-2 px-2 py-0.5 text-[10px] font-bold bg-[var(--accent-primary)] text-white rounded border border-[var(--accent-primary)] uppercase animate-pulse shadow-[0_0_8px_var(--accent-primary)]">
-                                진행중
-                            </span>
-                        )}
-                        {/* 삭제 버튼 */}
-                        <button
-                            onClick={(e) => handleDeleteMeeting(e, meeting.meetingId)}
-                            className="absolute top-3 right-3 p-1.5 rounded-lg text-[var(--foreground)] opacity-0 group-hover:opacity-30 hover:!opacity-100 hover:text-[var(--accent-primary)] hover:bg-[var(--highlight-bg)] transition-all"
-                            title="회의 삭제"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                        </button>
-                    </div>
-                ))}
-
+            {/* List */}
+            <div className="flex-1 overflow-y-auto">
                 {isLoading && (
-                    <div className="text-center py-6">
-                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-[var(--highlight-bg)] border-t-[var(--accent-primary)]"></div>
+                    <div className="flex justify-center py-8">
+                        <div className="w-4 h-4 border-2 border-[var(--border-color)] border-t-indigo-500 rounded-full animate-spin" />
                     </div>
                 )}
 
+                {!isLoading && meetings.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                        <svg className="w-6 h-6 text-[var(--foreground)] opacity-15 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                        <p className="text-xs text-[var(--foreground)] opacity-25">아직 회의 기록이 없습니다</p>
+                    </div>
+                )}
+
+                {Object.entries(grouped).map(([date, dayMeetings]) => (
+                    <div key={date}>
+                        <div className="px-4 pt-4 pb-1">
+                            <span className="text-[10px] font-semibold text-[var(--foreground)] opacity-30 uppercase tracking-wider">
+                                {date}
+                            </span>
+                        </div>
+
+                        {dayMeetings.map(meeting => {
+                            const isRecordingThis = recordingMeetingId === meeting.meetingId;
+                            const isSelected = selectedMeetingId === meeting.meetingId;
+                            const { time } = toKST(meeting.startedAt);
+
+                            return (
+                                <div
+                                    key={meeting.meetingId}
+                                    onClick={() => onMeetingSelect?.(meeting.meetingId)}
+                                    className={`group relative flex items-center px-4 py-3 cursor-pointer transition-colors border-l-2 ${
+                                        isSelected
+                                            ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-500'
+                                            : 'hover:bg-[var(--highlight-bg)] border-transparent'
+                                    }`}
+                                >
+                                    <div className="flex-1 min-w-0 pr-6">
+                                        <div className="flex items-center gap-1.5 mb-0.5">
+                                            {isRecordingThis && (
+                                                <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                            )}
+                                            <p className={`text-[13px] font-medium truncate ${
+                                                isSelected
+                                                    ? 'text-indigo-700 dark:text-indigo-300'
+                                                    : 'text-[var(--foreground)]'
+                                            }`}>
+                                                {meeting.title || `회의 #${meeting.meetingId}`}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[11px] text-[var(--foreground)] opacity-35">{time}</span>
+                                            {!meeting.endedAt && (
+                                                <span className="text-[10px] font-semibold text-emerald-500">
+                                                    진행 중
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {meeting.endedAt && (
+                                        <button
+                                            onClick={(e) => handleDelete(e, meeting.meetingId)}
+                                            className="absolute right-3 p-1 rounded opacity-0 group-hover:opacity-30 hover:!opacity-100 hover:text-red-500 text-[var(--foreground)] transition-all"
+                                            title="삭제"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                ))}
             </div>
         </div>
     );

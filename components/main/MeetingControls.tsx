@@ -1,7 +1,14 @@
-import { useState, useEffect } from 'react';
-import Button from '../common/Button';
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
 import { meetingApi } from '@/lib/api';
 import { useMeeting } from '@/components/providers/MeetingProvider';
+
+const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
 
 interface MeetingControlsProps {
     isActive: boolean;
@@ -17,171 +24,180 @@ export default function MeetingControls({
     meetingId,
     onMeetingStart,
     onMeetingEnd,
-    onSubjectUpdate,
     memo,
 }: MeetingControlsProps) {
+    const { startGlobalMeeting, endGlobalMeeting, volume, activeMeetingId, isRecording } = useMeeting();
     const [isLoading, setIsLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [meetingTitle, setMeetingTitle] = useState('새로운 회의');
-    const { startGlobalMeeting, endGlobalMeeting, volume, activeMeetingId, isRecording } = useMeeting();
+    const [elapsedSecs, setElapsedSecs] = useState(0);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Check if THIS specific meeting controls instance corresponds to the active recording session
-    const isThisMeetingRecording = isRecording && activeMeetingId === meetingId;
+    const isThisRecording = isRecording && activeMeetingId === meetingId;
 
-    const handleStartClick = () => {
-        setMeetingTitle('새로운 회의');
-        setIsModalOpen(true);
-    };
+    useEffect(() => {
+        if (isThisRecording) {
+            setElapsedSecs(0);
+            timerRef.current = setInterval(() => setElapsedSecs(s => s + 1), 1000);
+        } else {
+            if (timerRef.current) clearInterval(timerRef.current);
+        }
+        return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }, [isThisRecording]);
 
-    const handleStartConfirm = async () => {
+    const handleStart = async () => {
         setIsModalOpen(false);
         const title = meetingTitle.trim() || '새로운 회의';
-
         setIsLoading(true);
         try {
-            const response = await meetingApi.start(title);
-            if (response.success) {
-                onMeetingStart(response.meetingId, response.chatId);
-                await startGlobalMeeting(response.meetingId, response.chatId);
+            const resp = await meetingApi.start(title);
+            if (resp.success) {
+                onMeetingStart(resp.meetingId, resp.chatId);
+                await startGlobalMeeting(resp.meetingId, resp.chatId);
             }
-        } catch (error) {
-            console.error('Failed to start meeting:', error);
-            alert('회의 시작에 실패했습니다.');
+        } catch (e) {
+            console.error('Failed to start meeting:', e);
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleEnd = async () => {
-        if (!meetingId) return;
-
-        const confirmed = confirm('회의를 종료하시겠습니까?');
-        if (!confirmed) return;
-
+        if (!meetingId || !window.confirm('회의를 종료하시겠습니까?')) return;
         setIsLoading(true);
         try {
-            const response = await meetingApi.end(meetingId, memo);
-            if (response.success) {
+            const resp = await meetingApi.end(meetingId, memo);
+            if (resp.success) {
                 endGlobalMeeting();
-                onMeetingEnd(response.summary);
+                onMeetingEnd(resp.summary);
             }
-        } catch (error) {
-            console.error('Failed to end meeting:', error);
-            alert('회의 종료에 실패했습니다.');
+        } catch (e) {
+            console.error('Failed to end meeting:', e);
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Cleanup handled by Provider
-    useEffect(() => {
-        // No local cleanup needed anymore
-        return () => { };
-    }, []);
-
-    // Volume Meter Component (SVG Waves)
-    const VolumeMeter = () => {
-        const isHigh = volume > 80;
-        const color = isHigh ? '#ef4444' : '#6366f1'; // Red-500 or Indigo-500
-
-        return (
-            <div className="flex items-center space-x-1 ml-2 mr-1">
-                <div className="flex items-end space-x-0.5 h-4">
-                    {[0.6, 1.0, 1.5, 1.0, 0.6].map((multiplier, i) => {
-                        const baseHeight = 4;
-                        const dynamicHeight = Math.max(baseHeight, (volume * multiplier) / 4);
-                        return (
-                            <div
-                                key={i}
-                                className="w-1 rounded-full transition-all duration-100 ease-out"
-                                style={{
-                                    height: `${isThisMeetingRecording ? dynamicHeight : baseHeight}px`,
-                                    backgroundColor: isThisMeetingRecording && volume > 5 ? color : '#94a3b8',
-                                    opacity: isThisMeetingRecording ? (volume > 5 ? 1 : 0.4) : 0.2,
-                                    boxShadow: isThisMeetingRecording && volume > 20 ? `0 0 8px ${color}66` : 'none'
-                                }}
-                            />
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    };
+    // Volume bars (9 bars, symmetric)
+    const barMultipliers = [0.4, 0.6, 0.9, 1.2, 1.5, 1.2, 0.9, 0.6, 0.4];
 
     return (
         <>
-            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] px-6 py-3 rounded-full shadow-2xl transition-all duration-300 hover:shadow-[var(--accent-primary)]/10 active:scale-[0.99]">
-                <div className="flex items-center justify-between space-x-8">
-                    <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-3">
-                            <div className="relative">
-                                <div className={`w-3.5 h-3.5 rounded-full ${isActive ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]' : 'bg-gray-400 opacity-50'}`}></div>
-                                {isActive && isThisMeetingRecording && <div className="absolute inset-0 w-3.5 h-3.5 rounded-full bg-emerald-500 animate-ping opacity-40"></div>}
-                            </div>
-                            <span className="text-xs font-bold text-[var(--foreground)] opacity-60 tracking-wider whitespace-nowrap">
-                                {isActive ? 'RECORDING LIVE' : 'READY TO START'}
-                            </span>
-                        </div>
-
-                        {/* Real-time Audio Visualizer */}
-                        <div className="flex items-center h-4 border-l border-[var(--border-color)] pl-4">
-                            <VolumeMeter />
-                        </div>
-                    </div>
-
-                    <div className="flex items-center">
-                        {!isActive ? (
-                            <button
-                                onClick={handleStartClick}
-                                disabled={isLoading}
-                                className="px-10 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full text-sm font-bold shadow-lg transition-all transform hover:scale-105 active:scale-95 disabled:bg-gray-500 disabled:scale-100 uppercase tracking-widest"
-                            >
-                                {isLoading ? 'Wait...' : 'Start Meeting'}
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleEnd}
-                                disabled={isLoading}
-                                className="px-10 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full text-sm font-bold shadow-lg transition-all transform hover:scale-105 active:scale-95 disabled:bg-gray-500 uppercase tracking-widest"
-                            >
-                                {isLoading ? 'Wait...' : 'End Meeting'}
-                            </button>
+            <div className="flex-shrink-0 h-16 bg-[var(--card-bg)] border-t border-[var(--border-color)] flex items-center px-6 gap-6">
+                {/* Left: Mic + Waveform + Status */}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {/* Mic icon */}
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center relative ${
+                        isActive ? 'bg-red-50 dark:bg-red-950/20' : 'bg-[var(--highlight-bg)]'
+                    }`}>
+                        <svg
+                            className={`w-4 h-4 ${isActive ? 'text-red-500' : 'text-[var(--foreground)] opacity-30'}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                        {isActive && isThisRecording && (
+                            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
                         )}
                     </div>
+
+                    {/* Waveform */}
+                    <div className="flex items-center gap-0.5 h-6">
+                        {barMultipliers.map((mult, i) => {
+                            const activeHeight = Math.max(3, Math.min(22, (volume * mult) / 5));
+                            const h = isThisRecording && volume > 5 ? activeHeight : 3;
+                            const color = volume > 80
+                                ? '#ef4444'
+                                : isThisRecording && volume > 5
+                                    ? '#6366f1'
+                                    : 'var(--border-color)';
+                            return (
+                                <div
+                                    key={i}
+                                    className="w-1 rounded-full transition-all duration-75"
+                                    style={{ height: `${h}px`, backgroundColor: color }}
+                                />
+                            );
+                        })}
+                    </div>
+
+                    <span className={`text-xs font-medium ${
+                        isActive
+                            ? isThisRecording ? 'text-red-500' : 'text-emerald-500'
+                            : 'text-[var(--foreground)] opacity-30'
+                    }`}>
+                        {isActive
+                            ? isThisRecording ? '녹음 중' : '회의 중'
+                            : '대기'}
+                    </span>
+                </div>
+
+                {/* Center: Timer */}
+                <div className="flex-shrink-0 min-w-[80px] text-center">
+                    {isThisRecording ? (
+                        <span className="text-xl font-mono font-bold text-[var(--foreground)] tabular-nums">
+                            {formatTime(elapsedSecs)}
+                        </span>
+                    ) : isActive ? (
+                        <span className="text-sm text-[var(--foreground)] opacity-30 font-medium">
+                            {meetingId ? `#${meetingId}` : '—'}
+                        </span>
+                    ) : null}
+                </div>
+
+                {/* Right: Action button */}
+                <div className="flex-1 flex justify-end">
+                    {!isActive ? (
+                        <button
+                            onClick={() => { setMeetingTitle('새로운 회의'); setIsModalOpen(true); }}
+                            disabled={isLoading}
+                            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 shadow-sm shadow-indigo-500/20"
+                        >
+                            {isLoading ? '...' : '회의 시작'}
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleEnd}
+                            disabled={isLoading}
+                            className="px-5 py-2 text-red-500 border border-red-200 dark:border-red-900/40 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                        >
+                            {isLoading ? '...' : '회의 종료'}
+                        </button>
+                    )}
                 </div>
             </div>
 
-            {/* Meeting Title Modal */}
+            {/* Start Meeting Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-in zoom-in-95 duration-200">
-                        <h3 className="text-xl font-bold text-[var(--foreground)] mb-4">회의 시작</h3>
-                        <p className="text-sm text-[var(--foreground)] opacity-70 mb-4">
-                            새로 시작할 회의의 주제나 이름을 입력해주세요.
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
+                        <h3 className="text-base font-bold text-[var(--foreground)] mb-1">새 회의 시작</h3>
+                        <p className="text-xs text-[var(--foreground)] opacity-50 mb-4">
+                            회의 이름을 입력해주세요
                         </p>
                         <input
                             type="text"
                             value={meetingTitle}
                             onChange={(e) => setMeetingTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleStartConfirm();
-                            }}
-                            className="w-full bg-[var(--background)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500/50 mb-6 placeholder-gray-500"
-                            placeholder="회의 이름 입력 (예: 주간 업무 회의)"
+                            onKeyDown={(e) => e.key === 'Enter' && handleStart()}
+                            className="w-full bg-[var(--background)] border border-[var(--border-color)] rounded-lg px-4 py-2.5 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 mb-4 placeholder-[var(--foreground)] placeholder-opacity-20"
+                            placeholder="예: 주간 팀 미팅"
                             autoFocus
                         />
-                        <div className="flex space-x-3 justify-end">
+                        <div className="flex items-center justify-end gap-2">
                             <button
                                 onClick={() => setIsModalOpen(false)}
-                                className="px-4 py-2 rounded-xl text-sm font-medium border border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--foreground)]/5 transition-colors"
+                                className="px-4 py-2 text-sm text-[var(--foreground)] opacity-50 hover:opacity-100 transition-opacity"
                             >
                                 취소
                             </button>
                             <button
-                                onClick={handleStartConfirm}
-                                className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20"
+                                onClick={handleStart}
+                                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors"
                             >
-                                이름 저장 후 시작
+                                시작
                             </button>
                         </div>
                     </div>

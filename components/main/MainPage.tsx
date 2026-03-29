@@ -4,11 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Sidebar from '@/components/main/Sidebar';
-import CurrentSubject from '@/components/main/CurrentSubject';
+import TranscriptView, { TranscriptSegment } from '@/components/main/TranscriptView';
 import ChatInterface from '@/components/main/ChatInterface';
 import MeetingControls from '@/components/main/MeetingControls';
 import Memo from '@/components/main/Memo';
-import MeetingSummary from '@/components/main/MeetingSummary';
 import SummaryModal from '@/components/main/SummaryModal';
 import { isAuthenticated, logout } from '@/lib/auth';
 import { meetingApi, subjectApi } from '@/lib/api';
@@ -19,388 +18,325 @@ interface MainPageProps {
     initialMeetingId?: number;
 }
 
+let _segId = 0;
+
 export default function MainPage({ initialMeetingId }: MainPageProps) {
     const { theme, toggleTheme } = useTheme();
-    const { lastAnalysisResult } = useMeeting();
+    const { lastAnalysisResult, isRecording, activeMeetingId: recordingMeetingId } = useMeeting();
     const router = useRouter();
+
     const [isLoading, setIsLoading] = useState(true);
     const [currentMeeting, setCurrentMeeting] = useState<any>(null);
-    const [currentSubject, setCurrentSubject] = useState<any>(null);
     const [suggestedSubjects, setSuggestedSubjects] = useState<string[]>([]);
     const [chatId, setChatId] = useState<number | null>(null);
-    const [activeTab, setActiveTab] = useState<'chat' | 'memo' | 'summary'>('chat');
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [summaryText, setSummaryText] = useState<string>('');
+    const [rightTab, setRightTab] = useState<'chat' | 'memo'>('chat');
+    const [summaryText, setSummaryText] = useState('');
     const [showSummaryModal, setShowSummaryModal] = useState(false);
     const [currentMemo, setCurrentMemo] = useState('');
-    const chatRef = useRef<any>(null);
     const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
+    const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>([]);
+    const chatRef = useRef<any>(null);
 
+    const isActive = !!currentMeeting && !currentMeeting.endedAt;
+    const isThisRecording = isRecording && recordingMeetingId === currentMeeting?.meetingId;
+
+    // Auth check
     useEffect(() => {
-        // Check authentication
         if (!isAuthenticated()) {
             router.push('/login');
             return;
         }
-
         if (initialMeetingId) {
             handleMeetingSelect(initialMeetingId);
         } else {
-            // Dashboard mode: clear all meeting-specific states
             setCurrentMeeting(null);
-            setCurrentSubject(null);
             setChatId(null);
             setSuggestedSubjects([]);
             setIsLoading(false);
         }
     }, [initialMeetingId]);
 
-    // ── 주제 자동 갱신 폴링 ─────────────────────────────────────────
-    // 회의가 활성화된 동안 10초마다 BE에서 최신 주제 목록을 가져와
-    // 새로고침 없이도 AI 추출 주제 버튼이 자동으로 나타납니다.
+    // Reset transcript when meeting changes
+    useEffect(() => {
+        setTranscriptSegments([]);
+        setSuggestedSubjects([]);
+    }, [currentMeeting?.meetingId]);
+
+    // Process real-time audio analysis results
+    useEffect(() => {
+        if (!lastAnalysisResult || !currentMeeting?.meetingId || currentMeeting?.endedAt) return;
+
+        // Update topics
+        const topics: string[] = lastAnalysisResult.suggestions || lastAnalysisResult.newTopics || [];
+        if (topics.length > 0) {
+            setSuggestedSubjects(prev => {
+                const combined = [...prev, ...topics];
+                return combined.filter((v, i, s) => s.indexOf(v) === i);
+            });
+        }
+
+        // Append transcript segment if returned
+        if (lastAnalysisResult.transcript) {
+            setTranscriptSegments(prev => [...prev, {
+                id: ++_segId,
+                text: lastAnalysisResult.transcript,
+                time: new Date(),
+            }]);
+        }
+    }, [lastAnalysisResult]);
+
+    // Polling for topics (10s)
     useEffect(() => {
         const meetingId = currentMeeting?.meetingId;
-        const isActive = meetingId && !currentMeeting?.endedAt;
-        if (!isActive) return;
+        if (!meetingId || currentMeeting?.endedAt) return;
 
-        const pollTopics = async () => {
+        const poll = async () => {
             try {
                 const res = await subjectApi.getCurrent(meetingId);
-
-                // 주제 목록 갱신 (중복 제거)
-                if (res.suggestions && res.suggestions.length > 0) {
+                if (res.suggestions?.length > 0) {
                     setSuggestedSubjects(prev => {
                         const combined = [...prev, ...res.suggestions];
-                        return combined.filter((v, i, self) => self.indexOf(v) === i);
+                        return combined.filter((v, i, s) => s.indexOf(v) === i);
                     });
                 }
-
-                // 현재 주제가 바뀌었을 때만 업데이트 -> 사용자 요청으로 자동 변경 방지 (Suggestions만 업데이트)
-                /* 
-                const newSubject = res.subject;
-                if (newSubject) {
-                    setCurrentSubject((prev: any) => {
-                        const prevId = prev?.subjectId;
-                        const newId = newSubject.subjectId;
-                        if (prevId !== newId) {
-                            if (newSubject.chatId) setChatId(newSubject.chatId);
-                            return newSubject;
-                        }
-                        return prev;
-                    });
-                }
-                */
-            } catch {
-                // 폴링 오류는 무시 (회의 흐름에 영향 없음)
-            }
+            } catch { }
         };
 
-        const intervalId = setInterval(pollTopics, 10000); // 10초마다
-        return () => clearInterval(intervalId);
+        const id = setInterval(poll, 10000);
+        return () => clearInterval(id);
     }, [currentMeeting?.meetingId, currentMeeting?.endedAt]);
-
-
-    const loadCurrentMeeting = async () => {
-        setIsLoading(true);
-        // Refresh sidebar on initial load or re-check
-        setSidebarRefreshKey(prev => prev + 1);
-        try {
-            const meeting = await meetingApi.getCurrent();
-            if (meeting) {
-                setCurrentMeeting(meeting);
-                setChatId(meeting.chatId);
-
-                // Load current subject
-                const subjectResponse = await subjectApi.getCurrent(meeting.meetingId);
-                if (subjectResponse.subject) {
-                    setCurrentSubject(subjectResponse.subject);
-                    // setChatId(subjectResponse.subject.chatId); // Disable auto-switch
-                    setSuggestedSubjects(subjectResponse.suggestions || []);
-                }
-            }
-        } catch (error) {
-            console.error('Failed to load current meeting:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleMeetingStart = (meetingId: number, newChatId: number) => {
-        // Refresh sidebar list to show new meeting
-        setSidebarRefreshKey(prev => prev + 1);
-        // Navigate to the meeting page
-        router.push(`/meeting/${meetingId}`);
-    };
-
-    const handleMeetingEnd = (summary?: string) => {
-        // Refresh sidebar list to update status
-        setSidebarRefreshKey(prev => prev + 1);
-        if (summary) {
-            setSummaryText(summary);
-            setShowSummaryModal(true);
-        } else {
-            // No summary, just go back
-            router.push('/dashboard');
-        }
-    };
 
     const handleMeetingSelect = async (meetingId: number) => {
         if (initialMeetingId !== meetingId) {
             router.push(`/meeting/${meetingId}`);
             return;
         }
-
         setIsLoading(true);
         try {
             const meeting = await meetingApi.getById(meetingId);
             setCurrentMeeting(meeting);
             setChatId(meeting.chatId);
-
-            const subjectResponse = await subjectApi.getCurrent(meetingId);
-            // Always update state to clear old data if no subject found
-            setCurrentSubject(subjectResponse.subject || null);
-            if (subjectResponse.subject) {
-                // setChatId(subjectResponse.subject.chatId); // Disable auto-switch
-            }
-            setSuggestedSubjects(subjectResponse.suggestions || []);
-        } catch (error) {
-            console.error('Failed to load meeting:', error);
+            const subResp = await subjectApi.getCurrent(meetingId);
+            setSuggestedSubjects(subResp.suggestions || []);
+        } catch {
             setCurrentMeeting(null);
-            setCurrentSubject(null);
-            setChatId(null);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleSubjectUpdate = (response: any) => {
-        console.log('[MainPage] Subject response update:', response);
-        if (response.subject) {
-            // const updatedSubject = { ...response.subject };
-            // if (response.summary) {
-            //     updatedSubject.summary = response.summary;
-            // }
-            // Update current subject -> DISABLED to keep user's manual subject
-            // setCurrentSubject(updatedSubject);
+    const handleMeetingStart = (meetingId: number, newChatId: number) => {
+        setSidebarRefreshKey(k => k + 1);
+        router.push(`/meeting/${meetingId}`);
+    };
 
-            // If the subject has its own chatId, update it
-            // if (updatedSubject.chatId) {
-            //    setChatId(updatedSubject.chatId); // Disable auto-switch
-            // }
-        }
-
-        // Handle suggestions/topics
-        if (response.suggestions || response.newTopics) {
-            const incomingTopics = response.suggestions || response.newTopics || [];
-            console.log('[MainPage] Processing topics:', incomingTopics);
-
-            setSuggestedSubjects(prev => {
-                // Merge old and new, filter duplicates
-                const combined = [...prev, ...incomingTopics];
-                const unique = combined.filter((val, idx, self) => self.indexOf(val) === idx);
-                return unique;
-            });
+    const handleMeetingEnd = (summary?: string) => {
+        setSidebarRefreshKey(k => k + 1);
+        if (summary) {
+            setSummaryText(summary);
+            setShowSummaryModal(true);
+        } else {
+            router.push('/dashboard');
         }
     };
 
-    // React to real-time audio analysis results
-    useEffect(() => {
-        if (lastAnalysisResult && currentMeeting?.meetingId && !currentMeeting?.endedAt) {
-            handleSubjectUpdate(lastAnalysisResult);
-        }
-    }, [lastAnalysisResult]);
-
     const handleResearchRequest = (topic: string) => {
         if (chatRef.current) {
-            setActiveTab('chat');
+            setRightTab('chat');
             chatRef.current.handleResearch(topic);
         }
     };
 
-    const handleLogout = () => {
-        logout();
-    };
-
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-                <div className="text-center">
-                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--accent-primary)] mb-4"></div>
-                    <p className="text-zinc-400">로딩 중...</p>
-                </div>
+            <div className="h-screen flex items-center justify-center bg-[var(--background)]">
+                <div className="w-8 h-8 border-2 border-[var(--border-color)] border-t-indigo-500 rounded-full animate-spin" />
             </div>
         );
     }
 
     return (
-        <div className="h-screen flex flex-col bg-[var(--background)] text-[var(--foreground)] transition-colors duration-300">
-            {/* Header */}
-            <header className="h-16 bg-[var(--header-bg)]/80 backdrop-blur-md border-b border-[var(--border-color)] shadow-sm transition-all duration-300 z-30 sticky top-0">
-                <div className="h-full px-6 flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                        <Link href="/" className="flex items-center space-x-2 group">
-                            <img
-                                src={theme === 'dark' ? '/dark_logo2.png' : '/white_logo2.png'}
-                                alt="Motiveet"
-                                className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
-                            />
-                        </Link>
-                    </div>
-
-                    <div className="flex items-center space-x-4">
-                        {/* Theme Toggle Button */}
-                        <button
-                            onClick={toggleTheme}
-                            className="p-2 rounded-full hover:bg-[var(--card-bg)] transition-all duration-300 border border-[var(--border-color)] group shadow-sm bg-[var(--background)]"
-                            aria-label="Toggle Theme"
-                        >
-                            {theme === 'dark' ? (
-                                <svg className="w-5 h-5 text-yellow-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 9h-1m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" />
-                                </svg>
-                            ) : (
-                                <svg className="w-5 h-5 text-indigo-600 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                                </svg>
-                            )}
-                        </button>
-
-                        <button
-                            onClick={handleLogout}
-                            className="px-4 py-1.5 text-sm font-medium bg-[var(--card-bg)] hover:brightness-90 text-[var(--foreground)] rounded-md transition-all border border-[var(--border-color)] shadow-sm"
-                        >
-                            로그아웃
-                        </button>
-                    </div>
+        <div className="h-screen flex flex-col bg-[var(--background)] text-[var(--foreground)]">
+            {/* ── Header ── 48px ───────────────────────────────────────── */}
+            <header className="flex-shrink-0 h-12 flex items-center justify-between px-4 border-b border-[var(--border-color)] bg-[var(--header-bg)]">
+                <Link href="/" className="flex items-center">
+                    <img
+                        src={theme === 'dark' ? '/dark_logo2.png' : '/white_logo2.png'}
+                        alt="Motiveet"
+                        className="h-7 w-auto object-contain"
+                    />
+                </Link>
+                <div className="flex items-center gap-1">
+                    <button
+                        onClick={toggleTheme}
+                        className="p-2 rounded-md hover:bg-[var(--highlight-bg)] transition-colors text-[var(--foreground)] opacity-50 hover:opacity-100"
+                        aria-label="테마 전환"
+                    >
+                        {theme === 'dark' ? (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12h-1m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" />
+                            </svg>
+                        ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                            </svg>
+                        )}
+                    </button>
+                    <button
+                        onClick={logout}
+                        className="px-3 py-1.5 text-xs text-[var(--foreground)] opacity-50 hover:opacity-100 hover:bg-[var(--highlight-bg)] rounded-md transition-all"
+                    >
+                        로그아웃
+                    </button>
                 </div>
             </header>
 
-            {/* Main Content */}
-            <div className="flex-1 flex overflow-hidden relative">
-                {/* Sidebar Toggle Button */}
-                <button
-                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-6 h-12 bg-[var(--card-bg)] border border-l-0 border-[var(--border-color)] rounded-r-md flex items-center justify-center hover:brightness-90 transition-all shadow-lg text-[var(--foreground)]"
-                >
-                    <svg
-                        className={`w-4 h-4 text-inherit transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                </button>
+            {/* ── Body: 3 columns ──────────────────────────────────────── */}
+            <div className="flex-1 flex overflow-hidden">
 
-                {/* Sidebar */}
-                <div className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-80' : 'w-0'} overflow-hidden border-r border-[var(--border-color)]`}>
+                {/* Left: Sidebar 240px */}
+                <div className="w-60 flex-shrink-0 overflow-hidden">
                     <Sidebar
                         onMeetingSelect={handleMeetingSelect}
+                        activeMeetingId={currentMeeting?.meetingId}
                         refreshTrigger={sidebarRefreshKey}
                     />
                 </div>
 
-                {/* Main Area */}
-                <div className="flex-1 flex flex-col overflow-hidden bg-[var(--background)]">
-                    <div className="flex-1 overflow-y-auto p-6 pb-32 space-y-6">
-                        {/* Current Subject Area */}
-                        <div className="space-y-6">
-                            <CurrentSubject
-                                subject={currentSubject}
-                                meetingId={currentMeeting?.meetingId || null}
-                                meetingTitle={currentMeeting?.title}
-                                isActive={!!currentMeeting && !currentMeeting.endedAt}
-                                suggestions={suggestedSubjects}
-                                summary={currentSubject?.summary}
-                                files={currentSubject?.files || []}
-                                onSubjectChange={(newSub) => {
-                                    setCurrentSubject(newSub);
-                                    // If suggestions are returned during creation, update them too
-                                    if (newSub.suggestions) setSuggestedSubjects(newSub.suggestions);
-                                }}
-                                onResearch={handleResearchRequest}
-                            />
-                        </div>
-
-                        {/* Interactive Area: Chat or Memo */}
-                        <div className="bg-[var(--card-bg)] rounded-3xl overflow-hidden border border-2 border-[#A9A9A9] transition-colors duration-300 flex flex-col h-[600px]">
-                            {/* Tab Switcher */}
-                            <div className="flex border-b border-[var(--border-color)] bg-[var(--background)] p-1.5 space-x-1">
-                                <button
-                                    onClick={() => setActiveTab('chat')}
-                                    className={`flex-1 flex items-center justify-center py-2.5 rounded-2xl text-sm font-bold transition-all ${activeTab === 'chat'
-                                        ? 'bg-[var(--accent-primary)] text-white shadow-lg'
-                                        : 'text-[var(--foreground)] opacity-40 hover:opacity-100'
-                                        }`}
-                                >
-                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                                    </svg>
-                                    AI 채팅
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('memo')}
-                                    className={`flex-1 flex items-center justify-center py-2.5 rounded-2xl text-sm font-bold transition-all ${activeTab === 'memo'
-                                        ? 'bg-[var(--accent-primary)] text-white shadow-lg'
-                                        : 'text-[var(--foreground)] opacity-40 hover:opacity-100'
-                                        }`}
-                                >
-                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                    메모
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('summary')}
-                                    className={`flex-1 flex items-center justify-center py-2.5 rounded-2xl text-sm font-bold transition-all ${activeTab === 'summary'
-                                        ? 'bg-[var(--accent-primary)] text-white shadow-lg'
-                                        : 'text-[var(--foreground)] opacity-40 hover:opacity-100'
-                                        }`}
-                                >
-                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    회의 요약
-                                </button>
-                            </div>
-
-                            <div className="flex-1 overflow-hidden relative">
-                                {activeTab === 'chat' ? (
-                                    <ChatInterface
-                                        ref={chatRef}
-                                        chatId={chatId}
-                                        isMeetingActive={!!currentMeeting && !currentMeeting.endedAt}
-                                    />
-                                ) : activeTab === 'memo' ? (
-                                    <Memo
-                                        meetingId={currentMeeting?.meetingId || null}
-                                        onContentChange={setCurrentMemo}
-                                    />
+                {/* Center: Transcript */}
+                <div className="flex-1 flex flex-col overflow-hidden border-x border-[var(--border-color)]">
+                    {/* Meeting info bar */}
+                    <div className="flex-shrink-0 h-12 flex items-center px-6 gap-3 border-b border-[var(--border-color)] bg-[var(--card-bg)]">
+                        {currentMeeting ? (
+                            <>
+                                <h1 className="text-sm font-semibold text-[var(--foreground)] truncate">
+                                    {currentMeeting.title}
+                                </h1>
+                                {isActive ? (
+                                    <span className="flex-shrink-0 flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-semibold border border-emerald-100 dark:border-emerald-900/30">
+                                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                        진행 중
+                                    </span>
                                 ) : (
-                                    <MeetingSummary
-                                        summary={currentMeeting?.summary}
-                                        isLoading={isLoading}
-                                    />
+                                    <span className="flex-shrink-0 px-2 py-0.5 text-[10px] font-medium text-[var(--foreground)] opacity-30 border border-[var(--border-color)] rounded-full">
+                                        종료됨
+                                    </span>
+                                )}
+                            </>
+                        ) : (
+                            <span className="text-xs text-[var(--foreground)] opacity-30">
+                                회의를 선택하거나 새로 시작하세요
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Transcript */}
+                    <TranscriptView
+                        segments={transcriptSegments}
+                        isRecording={isThisRecording}
+                        currentMeeting={currentMeeting}
+                    />
+                </div>
+
+                {/* Right: Topics + Chat/Memo 320px */}
+                <div className="w-80 flex-shrink-0 flex flex-col overflow-hidden">
+                    {/* AI Topics section */}
+                    <div className="flex-shrink-0 border-b border-[var(--border-color)] bg-[var(--card-bg)]">
+                        <div className="px-4 py-3">
+                            <div className="flex items-center gap-2 mb-2.5">
+                                <span className="text-[10px] font-semibold text-[var(--foreground)] opacity-35 uppercase tracking-wider">
+                                    AI 추출 주제
+                                </span>
+                                {suggestedSubjects.length > 0 && (
+                                    <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold rounded-full min-w-[18px] text-center">
+                                        {suggestedSubjects.length}
+                                    </span>
+                                )}
+                                {isActive && (
+                                    <span className="ml-auto flex items-center gap-1 text-[10px] text-[var(--foreground)] opacity-25">
+                                        <span className="w-1 h-1 rounded-full bg-indigo-400 animate-pulse" />
+                                        실시간
+                                    </span>
                                 )}
                             </div>
+
+                            {suggestedSubjects.length === 0 ? (
+                                <p className="text-xs text-[var(--foreground)] opacity-25 py-1">
+                                    {isActive ? '대화를 분석하는 중...' : '추출된 주제가 없습니다'}
+                                </p>
+                            ) : (
+                                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                                    {suggestedSubjects.map((topic, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => handleResearchRequest(topic)}
+                                            title={`"${topic}" 검색`}
+                                            className="px-2.5 py-1 text-[11px] bg-[var(--highlight-bg)] hover:bg-indigo-50 dark:hover:bg-indigo-950/20 text-[var(--foreground)] hover:text-indigo-600 dark:hover:text-indigo-300 rounded-full border border-[var(--border-color)] hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all active:scale-95"
+                                        >
+                                            {topic}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
+                    </div>
+
+                    {/* Tab bar */}
+                    <div className="flex-shrink-0 flex border-b border-[var(--border-color)] bg-[var(--card-bg)]">
+                        <button
+                            onClick={() => setRightTab('chat')}
+                            className={`flex-1 py-2.5 text-xs font-semibold transition-all relative ${
+                                rightTab === 'chat'
+                                    ? 'text-indigo-600 dark:text-indigo-400'
+                                    : 'text-[var(--foreground)] opacity-35 hover:opacity-60'
+                            }`}
+                        >
+                            AI 채팅
+                            {rightTab === 'chat' && (
+                                <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-indigo-500 rounded-full" />
+                            )}
+                        </button>
+                        <button
+                            onClick={() => setRightTab('memo')}
+                            className={`flex-1 py-2.5 text-xs font-semibold transition-all relative ${
+                                rightTab === 'memo'
+                                    ? 'text-indigo-600 dark:text-indigo-400'
+                                    : 'text-[var(--foreground)] opacity-35 hover:opacity-60'
+                            }`}
+                        >
+                            메모
+                            {rightTab === 'memo' && (
+                                <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-indigo-500 rounded-full" />
+                            )}
+                        </button>
+                    </div>
+
+                    {/* Chat or Memo */}
+                    <div className="flex-1 overflow-hidden">
+                        {rightTab === 'chat' ? (
+                            <ChatInterface
+                                ref={chatRef}
+                                chatId={chatId}
+                                isMeetingActive={isActive}
+                            />
+                        ) : (
+                            <Memo
+                                meetingId={currentMeeting?.meetingId || null}
+                                onContentChange={setCurrentMemo}
+                            />
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Floating Footer: Meeting Controls (2/5 size centered) */}
-            <div className="fixed bottom-8 left-0 right-0 z-40 flex justify-center pointer-events-none">
-                <div className="w-[40%] min-w-[400px] pointer-events-auto">
-                    <MeetingControls
-                        isActive={!!currentMeeting && !currentMeeting.endedAt}
-                        meetingId={currentMeeting?.meetingId || null}
-                        onMeetingStart={handleMeetingStart}
-                        onMeetingEnd={handleMeetingEnd}
-                        onSubjectUpdate={handleSubjectUpdate}
-                        memo={currentMemo}
-                    />
-                </div>
-            </div>
+            {/* ── Bottom: Recording controls ── 64px ───────────────────── */}
+            <MeetingControls
+                isActive={isActive}
+                meetingId={currentMeeting?.meetingId || null}
+                onMeetingStart={handleMeetingStart}
+                onMeetingEnd={handleMeetingEnd}
+                memo={currentMemo}
+            />
 
             <SummaryModal
                 isOpen={showSummaryModal}
