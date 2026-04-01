@@ -1,26 +1,22 @@
+import { loggedFetch } from '../../../_logger';
+
 const BE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8000';
 
 export async function POST(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await params;
+    const authHeader = request.headers.get('Authorization');
+    const formData = await request.formData();
+    const headers: Record<string, string> = {};
+    if (authHeader) headers['Authorization'] = authHeader;
+
     try {
-        const { id } = await params;
-        const authHeader = request.headers.get('Authorization');
-
-        // FormData를 그대로 BE로 전달
-        const formData = await request.formData();
-
-        const headers: Record<string, string> = {};
-        if (authHeader) headers['Authorization'] = authHeader;
-
-        const response = await fetch(`${BE_URL}/meetings/${id}/audio`, {
-            method: 'POST',
-            headers,
-            body: formData,
-        });
-
-        const data = await response.json();
+        const { response, data } = await loggedFetch(
+            `${BE_URL}/meetings/${id}/audio`, 'POST',
+            { method: 'POST', headers, body: formData }
+        );
         return Response.json(data, { status: response.status });
     } catch (error) {
         return Response.json(

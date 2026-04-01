@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8000';
 
 // ── Token Management ────────────────────────────────────────────
 
@@ -26,6 +26,8 @@ export const clearTokens = (): void => {
 
 // ── Core Fetch Wrapper ──────────────────────────────────────────
 
+const SENSITIVE_ENDPOINTS = new Set(['/auth/signin', '/auth/signup']);
+
 async function apiCall<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -46,13 +48,24 @@ async function apiCall<T>(
         delete headers['Content-Type'];
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
-    });
+    const method = (options.method || 'GET').toUpperCase();
+    const url = `${API_BASE_URL}${endpoint}`;
+
+    // ── 요청 로그 ──────────────────────────────────────────────
+    console.log(`[API] → ${method} ${endpoint}`);
+    if (options.body && !SENSITIVE_ENDPOINTS.has(endpoint) && !(options.body instanceof FormData)) {
+        try { console.log('      body:', JSON.parse(options.body as string)); } catch { /* skip */ }
+    }
+
+    const response = await fetch(url, { ...options, headers });
+
+    // ── 응답 로그 ──────────────────────────────────────────────
+    const ok = response.ok;
+    console.log(`[API] ${ok ? '✓' : '✗'} ${method} ${endpoint} → ${response.status}`);
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error('      error:', errorData);
         // FastAPI는 'detail' 필드에 에러 메시지를 담는 경우가 많으므로 이를 우선적으로 확인
         const errorMessage = errorData?.error?.message || errorData?.message || errorData?.detail || `요청 실패 (${response.status})`;
         throw new Error(errorMessage);
@@ -382,6 +395,20 @@ export const roomApi = {
         });
     },
 
+    getById: async (roomId: number) => {
+        return apiCall<{
+            roomId: number;
+            folderId: number;
+            name: string;
+            type: 'ONLINE' | 'OFFLINE';
+            status: string;
+            hostId: number;
+            controllerId: number | null;
+            note: string | null;
+            createdAt: string;
+        }>(`/rooms/${roomId}`);
+    },
+
     join: async (roomId: number) => {
         return apiCall<{ roomId: number; role: string }>(`/rooms/${roomId}/join`, {
             method: 'POST',
@@ -391,6 +418,20 @@ export const roomApi = {
     leave: async (roomId: number) => {
         return apiCall<{ message: string }>(`/rooms/${roomId}/leave`, {
             method: 'POST',
+        });
+    },
+
+    assignController: async (roomId: number, userId: number) => {
+        return apiCall<{ controllerId: number }>(`/rooms/${roomId}/controller`, {
+            method: 'POST',
+            body: JSON.stringify({ userId }),
+        });
+    },
+
+    setMicState: async (roomId: number, userId: number, muted: boolean) => {
+        return apiCall<{ userId: number; muted: boolean }>(`/rooms/${roomId}/mic`, {
+            method: 'POST',
+            body: JSON.stringify({ userId, muted }),
         });
     },
 

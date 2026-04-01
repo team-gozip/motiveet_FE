@@ -1,3 +1,5 @@
+import { loggedFetch } from '../../_logger';
+
 const BE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://222.116.142.95:8000';
 
 function getAuthHeaders(request: Request): Record<string, string> {
@@ -11,14 +13,12 @@ export async function GET(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await params;
     try {
-        const { id } = await params;
-        const response = await fetch(`${BE_URL}/meetings/${id}`, {
-            method: 'GET',
-            headers: getAuthHeaders(request),
-        });
-
-        const data = await response.json();
+        const { response, data } = await loggedFetch(
+            `${BE_URL}/meetings/${id}`, 'GET',
+            { method: 'GET', headers: getAuthHeaders(request) }
+        );
         return Response.json(data, { status: response.status });
     } catch (error) {
         return Response.json(
@@ -32,14 +32,12 @@ export async function DELETE(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await params;
     try {
-        const { id } = await params;
-        const response = await fetch(`${BE_URL}/meetings/${id}`, {
-            method: 'DELETE',
-            headers: getAuthHeaders(request),
-        });
-
-        const data = await response.json();
+        const { response, data } = await loggedFetch(
+            `${BE_URL}/meetings/${id}`, 'DELETE',
+            { method: 'DELETE', headers: getAuthHeaders(request) }
+        );
         return Response.json(data, { status: response.status });
     } catch (error) {
         return Response.json(

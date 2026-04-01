@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWebRTC, PeerState } from '@/hooks/useWebRTC';
+import { useWebRTC } from '@/hooks/useWebRTC';
 import { roomApi } from '@/lib/api';
+import OfflineRoomPage from './OfflineRoomPage';
 
 // ── VideoTile ────────────────────────────────────────────────────────
 
@@ -46,7 +47,6 @@ function VideoTile({
                     <span className="text-xs text-gray-500">카메라 꺼짐</span>
                 </div>
             )}
-            {/* Label bar */}
             <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
                 <span className="bg-black/60 backdrop-blur-sm rounded-md px-2 py-0.5 text-xs text-white font-medium">
                     {label}
@@ -65,7 +65,7 @@ function VideoTile({
     );
 }
 
-// ── Control Button ───────────────────────────────────────────────────
+// ── ControlBtn ───────────────────────────────────────────────────────
 
 function ControlBtn({
     onClick,
@@ -101,19 +101,15 @@ function ControlBtn({
     );
 }
 
-// ── RoomPage ─────────────────────────────────────────────────────────
+// ── OnlineRoomContent ────────────────────────────────────────────────
 
-interface RoomPageProps {
-    roomId: number;
-}
-
-export default function RoomPage({ roomId }: RoomPageProps) {
+function OnlineRoomContent({ roomId }: { roomId: number }) {
     const router = useRouter();
     const [notes, setNotes] = useState('');
     const [notesSaved, setNotesSaved] = useState(false);
     const [showNotes, setShowNotes] = useState(false);
     const [isLeavingRoom, setIsLeavingRoom] = useState(false);
-    const notesSaveTimer = useRef<ReturnType<typeof setTimeout>>();
+    const notesSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     const handleLeave = useCallback(async () => {
         if (isLeavingRoom) return;
@@ -127,7 +123,6 @@ export default function RoomPage({ roomId }: RoomPageProps) {
         onLeave: handleLeave,
     });
 
-    // Auto-save notes with debounce
     const handleNotesChange = (text: string) => {
         setNotes(text);
         setNotesSaved(false);
@@ -145,8 +140,7 @@ export default function RoomPage({ roomId }: RoomPageProps) {
         handleLeave();
     };
 
-    // Grid layout: 1 col for 1 peer, 2×2 for 2-4, 3×2 for 5-6, etc.
-    const allParticipants: Array<{ userId: string; stream: MediaStream | null; isLocal: boolean }> = [
+    const allParticipants = [
         { userId: myUserId, stream: localStream, isLocal: true },
         ...Array.from(peers.values()).map(p => ({ ...p, isLocal: false })),
     ];
@@ -159,7 +153,6 @@ export default function RoomPage({ roomId }: RoomPageProps) {
 
     return (
         <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
-            {/* Header */}
             <header className="flex items-center justify-between px-6 py-3 bg-gray-900/80 backdrop-blur border-b border-white/5 flex-shrink-0">
                 <div className="flex items-center gap-3">
                     <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
@@ -173,9 +166,7 @@ export default function RoomPage({ roomId }: RoomPageProps) {
                             화면 공유 중
                         </span>
                     )}
-                    <span className="text-xs text-gray-500">
-                        {allParticipants.length}명 참여 중
-                    </span>
+                    <span className="text-xs text-gray-500">{allParticipants.length}명 참여 중</span>
                     <button
                         onClick={() => setShowNotes(v => !v)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -187,17 +178,12 @@ export default function RoomPage({ roomId }: RoomPageProps) {
                 </div>
             </header>
 
-            {/* Body */}
             <div className="flex flex-1 min-h-0">
-                {/* Video grid */}
                 <div className="flex-1 flex items-center justify-center p-6 min-h-0">
                     {error ? (
                         <div className="text-center">
                             <p className="text-red-400 text-sm mb-3">{error}</p>
-                            <button
-                                onClick={handleLeaveClick}
-                                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm"
-                            >
+                            <button onClick={handleLeaveClick} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm">
                                 나가기
                             </button>
                         </div>
@@ -216,14 +202,11 @@ export default function RoomPage({ roomId }: RoomPageProps) {
                     )}
                 </div>
 
-                {/* Notes panel */}
                 {showNotes && (
                     <aside className="w-72 bg-gray-900/60 border-l border-white/5 flex flex-col p-4 flex-shrink-0">
                         <div className="flex items-center justify-between mb-3">
                             <span className="text-sm font-semibold text-white">회의 메모</span>
-                            {notesSaved && (
-                                <span className="text-xs text-emerald-400">저장됨</span>
-                            )}
+                            {notesSaved && <span className="text-xs text-emerald-400">저장됨</span>}
                         </div>
                         <textarea
                             value={notes}
@@ -236,14 +219,8 @@ export default function RoomPage({ roomId }: RoomPageProps) {
                 )}
             </div>
 
-            {/* Control bar */}
             <div className="flex-shrink-0 flex items-center justify-center gap-3 py-4 px-6 bg-gray-900/80 backdrop-blur border-t border-white/5">
-                {/* Mic */}
-                <ControlBtn
-                    onClick={toggleMic}
-                    active={isMicOn}
-                    title={isMicOn ? '마이크 끄기' : '마이크 켜기'}
-                >
+                <ControlBtn onClick={toggleMic} active={isMicOn} title={isMicOn ? '마이크 끄기' : '마이크 켜기'}>
                     {isMicOn ? (
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -257,12 +234,7 @@ export default function RoomPage({ roomId }: RoomPageProps) {
                     <span>{isMicOn ? '마이크' : '음소거'}</span>
                 </ControlBtn>
 
-                {/* Camera */}
-                <ControlBtn
-                    onClick={toggleCamera}
-                    active={isCameraOn}
-                    title={isCameraOn ? '카메라 끄기' : '카메라 켜기'}
-                >
+                <ControlBtn onClick={toggleCamera} active={isCameraOn} title={isCameraOn ? '카메라 끄기' : '카메라 켜기'}>
                     {isCameraOn ? (
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
@@ -276,29 +248,15 @@ export default function RoomPage({ roomId }: RoomPageProps) {
                     <span>{isCameraOn ? '카메라' : '카메라 꺼짐'}</span>
                 </ControlBtn>
 
-                {/* Screen share */}
-                <ControlBtn
-                    onClick={toggleScreenShare}
-                    active={!isScreenSharing}
-                    highlighted={isScreenSharing}
-                    title={isScreenSharing ? '화면 공유 중지' : '화면 공유'}
-                >
-                    {isScreenSharing ? (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                    ) : (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                    )}
+                <ControlBtn onClick={toggleScreenShare} active={!isScreenSharing} highlighted={isScreenSharing} title={isScreenSharing ? '화면 공유 중지' : '화면 공유'}>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
                     <span>{isScreenSharing ? '공유 중지' : '화면 공유'}</span>
                 </ControlBtn>
 
-                {/* Divider */}
                 <div className="w-px h-8 bg-white/10 mx-1" />
 
-                {/* Leave */}
                 <ControlBtn onClick={handleLeaveClick} danger title="회의 나가기">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -308,4 +266,54 @@ export default function RoomPage({ roomId }: RoomPageProps) {
             </div>
         </div>
     );
+}
+
+// ── RoomPage (타입 라우터) ────────────────────────────────────────────
+
+interface RoomInfo {
+    type: 'ONLINE' | 'OFFLINE';
+    name: string;
+    hostId: number;
+    controllerId: number | null;
+}
+
+export default function RoomPage({ roomId }: { roomId: number }) {
+    const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
+
+    useEffect(() => {
+        roomApi.getById(roomId)
+            .then(info => {
+                setRoomInfo({
+                    type: info.type as 'ONLINE' | 'OFFLINE',
+                    name: info.name,
+                    hostId: info.hostId,
+                    controllerId: info.controllerId,
+                });
+            })
+            .catch(() => {
+                // 로드 실패 시 온라인으로 폴백
+                setRoomInfo({ type: 'ONLINE', name: '', hostId: 0, controllerId: null });
+            });
+    }, [roomId]);
+
+    if (!roomInfo) {
+        return (
+            <div className="h-screen bg-gray-950 flex items-center justify-center">
+                <span className="text-gray-500 text-sm">로딩 중...</span>
+            </div>
+        );
+    }
+
+    if (roomInfo.type === 'OFFLINE') {
+        return (
+            <OfflineRoomPage
+                roomId={roomId}
+                roomName={roomInfo.name}
+                hostId={roomInfo.hostId}
+                initialControllerId={roomInfo.controllerId}
+            />
+        );
+    }
+
+    return <OnlineRoomContent roomId={roomId} />;
 }

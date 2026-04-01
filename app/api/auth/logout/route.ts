@@ -1,18 +1,17 @@
+import { loggedFetch } from '../../_logger';
+
 const BE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://222.116.142.95:8001';
 
 export async function POST(request: Request) {
+    const authHeader = request.headers.get('Authorization');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (authHeader) headers['Authorization'] = authHeader;
+
     try {
-        const authHeader = request.headers.get('Authorization');
-
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (authHeader) headers['Authorization'] = authHeader;
-
-        const response = await fetch(`${BE_URL}/auth/logout`, {
-            method: 'POST',
-            headers,
-        });
-
-        const data = await response.json();
+        const { response, data } = await loggedFetch(
+            `${BE_URL}/auth/logout`, 'POST',
+            { method: 'POST', headers }
+        );
         return Response.json(data, { status: response.status });
     } catch (error) {
         return Response.json(
