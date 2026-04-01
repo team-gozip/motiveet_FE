@@ -20,7 +20,7 @@ function getMyUserId(): string {
 }
 
 function getWsBase(): string {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8000';
+    const apiUrl = process.env.API_URL || 'https://localhost:8000';
     return apiUrl.replace(/^https?:\/\//, (m) => (m.startsWith('https') ? 'wss://' : 'ws://'));
 }
 

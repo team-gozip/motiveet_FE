@@ -1,6 +1,6 @@
 import { loggedFetch } from '../../_logger';
 
-const BE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://222.116.142.95:8001';
+const BE_URL = process.env.API_URL || 'https://222.116.142.95:8001';
 
 export async function POST(request: Request) {
     const authHeader = request.headers.get('Authorization');

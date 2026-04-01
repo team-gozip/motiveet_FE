@@ -1,6 +1,6 @@
 import { loggedFetch } from '../../../_logger';
 
-const BE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8000';
+const BE_URL = process.env.API_URL || 'https://localhost:8000';
 
 export async function POST(
     request: Request,

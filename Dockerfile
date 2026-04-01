@@ -5,6 +5,11 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 COPY . .
+
+# NEXT_PUBLIC_* 변수는 빌드 타임에 번들에 인라인되므로 ARG로 받아야 함
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 RUN npm run build
 
 EXPOSE 3000
