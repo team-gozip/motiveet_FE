@@ -51,6 +51,7 @@ export function useWebRTC({ roomId, onLeave }: UseWebRTCOptions) {
     const pcsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
     const myId = useRef<string>(getMyUserId());
     const handleMsgRef = useRef<((data: string) => Promise<void>) | null>(null);
+    const stopScreenShareRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
     // ── helpers ──────────────────────────────────────────────────────
 
@@ -260,7 +261,7 @@ export function useWebRTC({ roomId, onLeave }: UseWebRTCOptions) {
 
             // Handle user stopping share via browser's native stop button
             screenTrack.onended = () => {
-                stopScreenShare();
+                stopScreenShareRef.current();
             };
         } catch (e) {
             // User cancelled or permission denied — not an error worth surfacing
@@ -286,6 +287,8 @@ export function useWebRTC({ roomId, onLeave }: UseWebRTCOptions) {
 
         setIsScreenSharing(false);
     }, [isScreenSharing, replaceVideoTrack]);
+
+    stopScreenShareRef.current = stopScreenShare;
 
     const toggleScreenShare = useCallback(async () => {
         if (isScreenSharing) {

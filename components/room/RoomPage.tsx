@@ -275,6 +275,9 @@ interface RoomInfo {
     name: string;
     hostId: number;
     controllerId: number | null;
+    activeMeetingId: number | null;
+    activeChatId: number | null;
+    summary: string | null;
 }
 
 export default function RoomPage({ roomId }: { roomId: number }) {
@@ -288,11 +291,14 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                     name: info.name,
                     hostId: info.hostId,
                     controllerId: info.controllerId,
+                    activeMeetingId: info.activeMeetingId ?? null,
+                    activeChatId: info.activeChatId ?? null,
+                    summary: info.summary ?? null,
                 });
             })
             .catch(() => {
                 // 로드 실패 시 온라인으로 폴백
-                setRoomInfo({ type: 'ONLINE', name: '', hostId: 0, controllerId: null });
+                setRoomInfo({ type: 'ONLINE', name: '', hostId: 0, controllerId: null, activeMeetingId: null, activeChatId: null, summary: null });
             });
     }, [roomId]);
 
@@ -311,6 +317,9 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                 roomName={roomInfo.name}
                 hostId={roomInfo.hostId}
                 initialControllerId={roomInfo.controllerId}
+                initialMeetingId={roomInfo.activeMeetingId}
+                initialChatId={roomInfo.activeChatId}
+                initialSummary={roomInfo.summary}
             />
         );
     }

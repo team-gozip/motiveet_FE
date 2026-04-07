@@ -57,7 +57,40 @@ async function apiCall<T>(
         try { console.log('      body:', JSON.parse(options.body as string)); } catch { /* skip */ }
     }
 
-    const response = await fetch(url, { ...options, headers });
+    let response = await fetch(url, { ...options, headers });
+
+    // ── 401 → 토큰 갱신 후 재시도 ─────────────────────────────
+    if (response.status === 401 && !endpoint.startsWith('/auth/')) {
+        const refreshToken = getRefreshToken();
+        if (refreshToken) {
+            try {
+                const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken }),
+                });
+                if (refreshRes.ok) {
+                    const refreshData = await refreshRes.json();
+                    setTokens(refreshData.accessToken, refreshData.refreshToken);
+                    headers['Authorization'] = `Bearer ${refreshData.accessToken}`;
+                    response = await fetch(url, { ...options, headers });
+                } else {
+                    // refresh token도 만료 → 로그아웃
+                    clearTokens();
+                    if (typeof window !== 'undefined') window.location.href = '/login';
+                    throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+                }
+            } catch (e) {
+                clearTokens();
+                if (typeof window !== 'undefined') window.location.href = '/login';
+                throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+            }
+        } else {
+            clearTokens();
+            if (typeof window !== 'undefined') window.location.href = '/login';
+            throw new Error('로그인이 필요합니다.');
+        }
+    }
 
     // ── 응답 로그 ──────────────────────────────────────────────
     const ok = response.ok;
@@ -405,8 +438,18 @@ export const roomApi = {
             hostId: number;
             controllerId: number | null;
             note: string | null;
+            summary: string | null;
+            activeMeetingId: number | null;
+            activeChatId: number | null;
             createdAt: string;
         }>(`/rooms/${roomId}`);
+    },
+
+    setActiveMeeting: async (roomId: number, meetingId: number | null, chatId: number | null, summary?: string | null) => {
+        return apiCall<{ success: boolean }>(`/rooms/${roomId}/active-meeting`, {
+            method: 'POST',
+            body: JSON.stringify({ meetingId, chatId, summary: summary ?? null }),
+        });
     },
 
     join: async (roomId: number) => {

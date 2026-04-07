@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useLayoutEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getAccessToken } from '@/lib/api';
@@ -32,7 +32,9 @@ export default function Memo({ meetingId, onContentChange }: MemoProps) {
     const [isEditing, setIsEditing] = useState(false);
 
     // meetingId가 바뀔 때마다 해당 회의의 메모를 불러옴
-    useEffect(() => {
+    // useLayoutEffect: localStorage 읽기는 페인트 전에 처리해야 깜빡임 없음
+    /* eslint-disable react-hooks/set-state-in-effect */
+    useLayoutEffect(() => {
         if (!meetingId) {
             setContent('');
             if (onContentChange) onContentChange('');
@@ -45,6 +47,7 @@ export default function Memo({ meetingId, onContentChange }: MemoProps) {
             onContentChange(initialContent);
         }
     }, [meetingId, onContentChange]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     // 회의별로 독립된 키에 저장
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {

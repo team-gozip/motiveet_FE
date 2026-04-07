@@ -284,7 +284,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                             </p>
                             {!search && (
                                 <p className="text-xs text-[var(--foreground)] opacity-20">
-                                    위의 "새 회의" 버튼을 눌러 첫 회의를 시작하세요
+                                    위의 &ldquo;새 회의&rdquo; 버튼을 눌러 첫 회의를 시작하세요
                                 </p>
                             )}
                         </div>

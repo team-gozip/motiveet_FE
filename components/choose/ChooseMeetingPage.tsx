@@ -31,7 +31,7 @@ export default function ChooseMeetingPage() {
             return;
         }
         loadFolders();
-    }, []);
+    }, [router]);
 
     const loadFolders = async () => {
         setIsLoading(true);

@@ -69,7 +69,7 @@ export default function SignupForm() {
 
                 if (loginResponse.success) {
                     setTokens(loginResponse.accessToken, loginResponse.refreshToken);
-                    router.push('/dashboard');
+                    router.push('/choose');
                 }
             }
         } catch (error) {

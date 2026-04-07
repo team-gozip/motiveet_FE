@@ -27,7 +27,7 @@ interface ChatInterfaceProps {
     isMeetingActive: boolean;
 }
 
-const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
+const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProps, ref) {
     const { chatId, isMeetingActive } = props;
     const { theme } = useTheme();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -158,7 +158,7 @@ const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
     if (!chatId) {
         return (
             <div className="h-full flex items-center justify-center bg-zinc-900/50">
-                <p className="text-zinc-500">회의를 시작하면 채팅을 사용할 수 있습니다.</p>
+                <p className="text-zinc-500 text-sm">채팅을 불러오는 중...</p>
             </div>
         );
     }
@@ -236,14 +236,14 @@ const ChatInterface = forwardRef((props: ChatInterfaceProps, ref) => {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        placeholder={isMeetingActive ? "메시지를 입력하세요..." : "회의 중에는 채팅이 가능합니다."}
+                        placeholder="메시지를 입력하세요..."
                         className="flex-1 px-4 py-3 bg-[var(--highlight-bg)]/50 text-[var(--foreground)] border border-[var(--border-color)] rounded-xl resize-none focus:ring-2 focus:ring-[var(--accent-primary)]/20 focus:border-[var(--accent-primary)]/30 outline-none transition-all placeholder:text-[var(--foreground)] placeholder:opacity-20 text-sm"
                         rows={1}
-                        disabled={isLoading || !isMeetingActive}
+                        disabled={isLoading}
                     />
                     <button
                         onClick={handleSend}
-                        disabled={!input.trim() || isLoading || !isMeetingActive}
+                        disabled={!input.trim() || isLoading}
                         className="px-6 py-3 bg-[var(--accent-primary)] hover:opacity-90 disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:opacity-50 text-white rounded-xl transition-all font-bold self-end shadow-md hover:shadow-lg active:scale-95 text-sm"
                     >
                         전송

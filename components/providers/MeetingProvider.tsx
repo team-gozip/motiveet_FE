@@ -49,11 +49,44 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const stopRecordingCleanup = () => {
+    if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+    }
+
+    if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+    }
+
+    if (mediaRecorderRef.current) {
+      if (mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      if (mediaRecorderRef.current.stream) {
+          mediaRecorderRef.current.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+      }
+    }
+
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
+
+    mediaRecorderRef.current = null;
+    audioContextRef.current = null;
+    analyserRef.current = null;
+    animationFrameRef.current = null;
+    setVolume(0);
+    setIsRecording(false);
+  };
+
   useEffect(() => {
     activeMeetingIdRef.current = activeMeetingId;
   }, [activeMeetingId]);
 
   useEffect(() => {
+    // checkActiveMeeting is async — setState calls inside happen after await, not synchronously
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     checkActiveMeeting();
     return () => {
       stopRecordingCleanup();
@@ -129,37 +162,6 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
       console.error("Failed to start global recording:", err);
       alert("마이크 사용을 시작할 수 없습니다.");
     }
-  };
-
-  const stopRecordingCleanup = () => {
-    if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-    }
-
-    if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-    }
-
-    if (mediaRecorderRef.current) {
-      if (mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      if (mediaRecorderRef.current.stream) {
-          mediaRecorderRef.current.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
-      }
-    }
-    
-    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
-
-    mediaRecorderRef.current = null;
-    audioContextRef.current = null;
-    analyserRef.current = null;
-    animationFrameRef.current = null;
-    setVolume(0);
-    setIsRecording(false);
   };
 
   const startGlobalMeeting = async (meetingId: number, chatId: number) => {
