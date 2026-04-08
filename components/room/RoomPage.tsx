@@ -301,11 +301,15 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const chunkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // ── 노트 로드 ───────────────────────────────────────────────────
     useEffect(() => {
         roomApi.getById(roomId).then(info => {
             if (info.note) setNotes(info.note);
+            if (info.transcript) {
+                setLiveTranscripts([info.transcript.trim()]);
+            }
         }).catch(() => {});
     }, [roomId]);
 
@@ -369,35 +373,50 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
         }
 
         const audioStream = new MediaStream(audioTracks);
-        const recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
 
-        recorder.ondataavailable = (e) => {
-            console.log('[RoomRecording] ondataavailable, size:', e.data.size);
-            if (e.data.size > 0) {
-                const audioBlob = new Blob([e.data], { type: 'audio/webm' });
-                roomApi.uploadAudio(roomId, audioBlob)
-                    .then(res => {
-                        console.log('[RoomRecording] Server response:', res);
-                        if (res.text && res.text.trim()) {
-                            setLiveTranscripts(prev => [...prev, res.text]);
-                        }
-                    })
-                    .catch(err => console.error('[RoomRecording] Upload failed:', err));
+        const recordChunk = () => {
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                mediaRecorderRef.current.stop();
             }
+
+            const recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+            recorder.ondataavailable = (e) => {
+                console.log('[RoomRecording] ondataavailable, size:', e.data.size);
+                if (e.data.size > 0) {
+                    const audioBlob = new Blob([e.data], { type: 'audio/webm' });
+                    roomApi.uploadAudio(roomId, audioBlob)
+                        .then(res => {
+                            console.log('[RoomRecording] Server response:', res);
+                            if (res.text && res.text.trim()) {
+                                setLiveTranscripts(prev => [...prev, res.text]);
+                            }
+                        })
+                        .catch(err => console.error('[RoomRecording] Upload failed:', err));
+                }
+            };
+            mediaRecorderRef.current = recorder;
+            recorder.start();
         };
 
-        mediaRecorderRef.current = recorder;
-        setLiveTranscripts([]);
+        recordChunk();
         setShowTranscript(true);
-        // timeslice: 10초마다 자동으로 ondataavailable 발생 (stop/start 불필요)
-        recorder.start(10000);
+
+        if (chunkIntervalRef.current) clearInterval(chunkIntervalRef.current);
+        chunkIntervalRef.current = setInterval(() => {
+            recordChunk();
+        }, 10000);
+
         console.log('[RoomRecording] Started recording peer:', targetPeerId);
     }, [peers, roomId]);
 
     const stopRecording = useCallback(() => {
+        if (chunkIntervalRef.current) {
+            clearInterval(chunkIntervalRef.current);
+            chunkIntervalRef.current = null;
+        }
         if (mediaRecorderRef.current) {
             if (mediaRecorderRef.current.state !== 'inactive') {
-                mediaRecorderRef.current.stop(); // 마지막 데이터도 ondataavailable로 전달됨
+                mediaRecorderRef.current.stop();
             }
             mediaRecorderRef.current = null;
         }
@@ -420,6 +439,7 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
     // 컴포넌트 언마운트 시 녹음 정리
     useEffect(() => {
         return () => {
+            if (chunkIntervalRef.current) clearInterval(chunkIntervalRef.current);
             if (mediaRecorderRef.current?.state !== 'inactive') {
                 mediaRecorderRef.current?.stop();
             }

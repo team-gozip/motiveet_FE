@@ -311,15 +311,6 @@ export function useWebRTC({ roomId, onLeave, onRecordRequest, onRecordAccept, on
         setIsMicOn(v => !v);
     }, []);
 
-    const toggleCamera = useCallback(() => {
-        localStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
-        // 새 MediaStream 객체로 React 재렌더 트리거
-        if (localStreamRef.current) {
-            setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
-        }
-        setIsCameraOn(v => !v);
-    }, []);
-
     const replaceVideoTrack = useCallback(async (newTrack: MediaStreamTrack | null) => {
         const replacements = Array.from(pcsRef.current.values()).map(async (pc) => {
             const sender = pc.getSenders().find(s => s.track?.kind === 'video');
@@ -327,6 +318,33 @@ export function useWebRTC({ roomId, onLeave, onRecordRequest, onRecordAccept, on
         });
         await Promise.all(replacements);
     }, []);
+
+    const toggleCamera = useCallback(async () => {
+        const currentTracks = localStreamRef.current?.getVideoTracks() || [];
+        
+        if (currentTracks.length === 0) {
+            try {
+                const vidStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const newTrack = vidStream.getVideoTracks()[0];
+                if (newTrack && localStreamRef.current) {
+                    localStreamRef.current.addTrack(newTrack);
+                    cameraTrackRef.current = newTrack;
+                    await replaceVideoTrack(newTrack);
+                    setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+                    setIsCameraOn(true);
+                }
+            } catch (e) {
+                console.error('카메라 권한을 얻을 수 없습니다', e);
+            }
+            return;
+        }
+
+        currentTracks.forEach(t => { t.enabled = !t.enabled; });
+        if (localStreamRef.current) {
+            setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+        }
+        setIsCameraOn(v => !v);
+    }, [replaceVideoTrack]);
 
     const startScreenShare = useCallback(async () => {
         if (isScreenSharing) return;
