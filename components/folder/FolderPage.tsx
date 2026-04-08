@@ -170,7 +170,11 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     };
 
     const handleRoomClick = async (room: Room) => {
-        if (room.status === 'ENDED') return;
+        if (room.status === 'ENDED') {
+            // 종료된 회의 → 메모/녹취록/요약 확인 페이지로 이동
+            router.push(`/room/${room.roomId}`);
+            return;
+        }
         try {
             await roomApi.join(room.roomId);
             router.push(`/room/${room.roomId}`);

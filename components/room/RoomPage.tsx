@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWebRTC } from '@/hooks/useWebRTC';
+import { useWebRTC, RecordRequest } from '@/hooks/useWebRTC';
 import { roomApi } from '@/lib/api';
 import OfflineRoomPage from './OfflineRoomPage';
 
@@ -13,30 +13,156 @@ function VideoTile({
     label,
     isLocal = false,
     isMuted = false,
+    isBeingRecorded = false,
+    onClick,
 }: {
     stream: MediaStream | null;
     label: string;
     isLocal?: boolean;
     isMuted?: boolean;
+    isBeingRecorded?: boolean;
+    onClick?: () => void;
 }) {
-    const videoRef = useRef<HTMLVideoElement>(null);
+    const videoNodeRef = useRef<HTMLVideoElement | null>(null);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    // 비디오가 실제로 재생 중인지 추적
+    const [isPlaying, setIsPlaying] = useState(false);
+
+    // stream이 바뀔 때마다 비디오에 연결 + play
+    const attachStream = useCallback((node: HTMLVideoElement | null) => {
+        videoNodeRef.current = node;
+        if (!node) return;
+        node.muted = isLocal;
+        if (stream) {
+            node.srcObject = stream;
+            node.play()
+                .then(() => setIsPlaying(true))
+                .catch(() => setIsPlaying(false));
+        } else {
+            node.srcObject = null;
+            setIsPlaying(false);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stream, isLocal]);
+
+    // stream 트랙이 바뀌어도(enabled 토글 등) 다시 재생 시도
+    useEffect(() => {
+        const node = videoNodeRef.current;
+        if (!node || !stream) { setIsPlaying(false); return; }
+        node.srcObject = stream;
+        node.play()
+            .then(() => setIsPlaying(true))
+            .catch(() => setIsPlaying(false));
+
+        // 트랙이 추가/제거될 때 자동 재연결
+        const handleTrackChange = () => {
+            if (node) {
+                node.srcObject = stream;
+                node.play().catch(() => {});
+            }
+        };
+        stream.addEventListener('addtrack', handleTrackChange);
+        stream.addEventListener('removetrack', handleTrackChange);
+        return () => {
+            stream.removeEventListener('addtrack', handleTrackChange);
+            stream.removeEventListener('removetrack', handleTrackChange);
+        };
+    }, [stream]);
 
     useEffect(() => {
-        if (videoRef.current) {
-            videoRef.current.srcObject = stream;
+        if (!stream) {
+            setIsSpeaking(false);
+            return;
         }
-    }, [stream]);
+
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length === 0) return;
+
+        if (isLocal && isMuted) {
+            setIsSpeaking(false);
+            return;
+        }
+
+        let audioContext: AudioContext;
+        try {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            audioContext = new AudioContextClass();
+        } catch (e) {
+            return;
+        }
+
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.2;
+
+        let source: MediaStreamAudioSourceNode;
+        try {
+            source = audioContext.createMediaStreamSource(new MediaStream([audioTracks[0]]));
+            source.connect(analyser);
+        } catch (e) {
+            audioContext.close();
+            return;
+        }
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let animationFrameId: number;
+        let speakingTimeout: NodeJS.Timeout | null = null;
+        let currentlySpeaking = false;
+
+        const checkVolume = () => {
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+
+            const threshold = 15;
+            if (average > threshold) {
+                if (!currentlySpeaking) {
+                    currentlySpeaking = true;
+                    setIsSpeaking(true);
+                }
+                if (speakingTimeout) clearTimeout(speakingTimeout);
+                speakingTimeout = setTimeout(() => {
+                    currentlySpeaking = false;
+                    setIsSpeaking(false);
+                }, 300);
+            }
+
+            animationFrameId = requestAnimationFrame(checkVolume);
+        };
+
+        checkVolume();
+
+        return () => {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            if (speakingTimeout) clearTimeout(speakingTimeout);
+            try { source.disconnect(); } catch (e) {}
+            try { audioContext.close(); } catch (e) {}
+        };
+    }, [stream, isMuted, isLocal]);
 
     const initials = label.slice(0, 2).toUpperCase();
 
     return (
-        <div className="relative rounded-2xl overflow-hidden bg-gray-900 aspect-video flex items-center justify-center">
+        <div
+            className={`relative rounded-2xl overflow-hidden bg-gray-900 aspect-video flex items-center justify-center transition-all duration-300 ${
+                !isLocal ? 'cursor-pointer' : ''
+            } ${
+                isSpeaking 
+                    ? 'ring-[3px] ring-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)] z-10' 
+                    : isBeingRecorded 
+                        ? 'ring-2 ring-red-500' 
+                        : !isLocal ? 'hover:ring-2 hover:ring-indigo-500/50' : ''
+            }`}
+            onClick={!isLocal ? onClick : undefined}
+        >
             {stream ? (
                 <video
-                    ref={videoRef}
+                    ref={attachStream}
                     autoPlay
                     playsInline
-                    muted={isLocal}
                     className="w-full h-full object-cover"
                 />
             ) : (
@@ -58,6 +184,12 @@ function VideoTile({
                             <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                             <line x1="3" y1="3" x2="21" y2="21" stroke="white" strokeWidth="2" />
                         </svg>
+                    </span>
+                )}
+                {isBeingRecorded && (
+                    <span className="bg-red-600/90 rounded-md px-1.5 py-0.5 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        <span className="text-[10px] text-white font-medium">녹음 중</span>
                     </span>
                 )}
             </div>
@@ -101,6 +233,51 @@ function ControlBtn({
     );
 }
 
+// ── RecordPermissionModal ────────────────────────────────────────────
+
+function RecordPermissionModal({
+    requesterName,
+    onAccept,
+    onReject,
+}: {
+    requesterName: string;
+    onAccept: () => void;
+    onReject: () => void;
+}) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-gray-800 border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+                <div className="flex items-center justify-center mb-4">
+                    <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                    </div>
+                </div>
+                <h3 className="text-center text-white font-semibold mb-2">마이크 녹음 요청</h3>
+                <p className="text-center text-gray-400 text-sm mb-6">
+                    <span className="text-indigo-400 font-medium">{requesterName}</span>님이 당신의 마이크 녹음을 요청했습니다.<br />
+                    녹음을 허용하시겠습니까?
+                </p>
+                <div className="flex gap-3">
+                    <button
+                        onClick={onReject}
+                        className="flex-1 px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-xl text-sm font-medium transition-colors"
+                    >
+                        거절
+                    </button>
+                    <button
+                        onClick={onAccept}
+                        className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors"
+                    >
+                        허용
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ── OnlineRoomContent ────────────────────────────────────────────────
 
 function OnlineRoomContent({ roomId }: { roomId: number }) {
@@ -111,6 +288,27 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
     const [isLeavingRoom, setIsLeavingRoom] = useState(false);
     const notesSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+    // ── 녹음 상태 ───────────────────────────────────────────────────
+    // 내가 녹음 중인 대상 (상대방 userId)
+    const [recordingTarget, setRecordingTarget] = useState<string | null>(null);
+    // 나에게 녹음 요청이 온 경우 (요청자 userId)
+    const [incomingRecordRequest, setIncomingRecordRequest] = useState<string | null>(null);
+    // 녹음 요청을 보내고 대기 중
+    const [pendingRecordRequest, setPendingRecordRequest] = useState<string | null>(null);
+    // 실시간 텍스트 변환 결과 (녹음자에게 표시)
+    const [liveTranscripts, setLiveTranscripts] = useState<string[]>([]);
+    const [showTranscript, setShowTranscript] = useState(false);
+    const transcriptEndRef = useRef<HTMLDivElement>(null);
+
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+
+    // ── 노트 로드 ───────────────────────────────────────────────────
+    useEffect(() => {
+        roomApi.getById(roomId).then(info => {
+            if (info.note) setNotes(info.note);
+        }).catch(() => {});
+    }, [roomId]);
+
     const handleLeave = useCallback(async () => {
         if (isLeavingRoom) return;
         setIsLeavingRoom(true);
@@ -118,11 +316,149 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
         router.push('/choose');
     }, [roomId, router, isLeavingRoom]);
 
-    const { localStream, peers, isMicOn, isCameraOn, isScreenSharing, isConnected, error, myUserId, toggleMic, toggleCamera, toggleScreenShare, leaveRoom } = useWebRTC({
+    // ── 녹음 콜백 ───────────────────────────────────────────────────
+    const handleRecordRequest = useCallback((req: RecordRequest) => {
+        setIncomingRecordRequest(req.from);
+    }, []);
+
+    const handleRecordAccept = useCallback((from: string) => {
+        // 상대방이 녹음을 수락함 → 해당 peer의 오디오 녹음 시작
+        setPendingRecordRequest(null);
+        setRecordingTarget(from);
+    }, []);
+
+    const handleRecordReject = useCallback((from: string) => {
+        if (pendingRecordRequest === from) {
+            setPendingRecordRequest(null);
+        }
+    }, [pendingRecordRequest]);
+
+    const handleRecordStop = useCallback((from: string) => {
+        // 상대방이 녹음 중지를 요청
+        if (recordingTarget === from) {
+            stopRecording();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [recordingTarget]);
+
+    const {
+        localStream, peers, isMicOn, isCameraOn, isScreenSharing, isConnected, error, myUserId,
+        toggleMic, toggleCamera, toggleScreenShare, leaveRoom,
+        sendRecordRequest, sendRecordAccept, sendRecordReject, sendRecordStop,
+    } = useWebRTC({
         roomId,
         onLeave: handleLeave,
+        onRecordRequest: handleRecordRequest,
+        onRecordAccept: handleRecordAccept,
+        onRecordReject: handleRecordReject,
+        onRecordStop: handleRecordStop,
     });
 
+    // ── 녹음 시작/중지 ─────────────────────────────────────────────
+    const startRecording = useCallback((targetPeerId: string) => {
+        const peerState = peers.get(targetPeerId);
+        if (!peerState?.stream) {
+            console.warn('[RoomRecording] No stream for peer:', targetPeerId);
+            return;
+        }
+
+        const audioTracks = peerState.stream.getAudioTracks();
+        if (audioTracks.length === 0) {
+            console.warn('[RoomRecording] No audio tracks for peer:', targetPeerId);
+            return;
+        }
+
+        const audioStream = new MediaStream(audioTracks);
+        const recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+
+        recorder.ondataavailable = (e) => {
+            console.log('[RoomRecording] ondataavailable, size:', e.data.size);
+            if (e.data.size > 0) {
+                const audioBlob = new Blob([e.data], { type: 'audio/webm' });
+                roomApi.uploadAudio(roomId, audioBlob)
+                    .then(res => {
+                        console.log('[RoomRecording] Server response:', res);
+                        if (res.text && res.text.trim()) {
+                            setLiveTranscripts(prev => [...prev, res.text]);
+                        }
+                    })
+                    .catch(err => console.error('[RoomRecording] Upload failed:', err));
+            }
+        };
+
+        mediaRecorderRef.current = recorder;
+        setLiveTranscripts([]);
+        setShowTranscript(true);
+        // timeslice: 10초마다 자동으로 ondataavailable 발생 (stop/start 불필요)
+        recorder.start(10000);
+        console.log('[RoomRecording] Started recording peer:', targetPeerId);
+    }, [peers, roomId]);
+
+    const stopRecording = useCallback(() => {
+        if (mediaRecorderRef.current) {
+            if (mediaRecorderRef.current.state !== 'inactive') {
+                mediaRecorderRef.current.stop(); // 마지막 데이터도 ondataavailable로 전달됨
+            }
+            mediaRecorderRef.current = null;
+        }
+        setRecordingTarget(null);
+    }, []);
+
+    // recordingTarget이 설정되면 녹음 시작
+    useEffect(() => {
+        if (recordingTarget) {
+            startRecording(recordingTarget);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [recordingTarget]);
+
+    // 실시간 텍스트 자동 스크롤
+    useEffect(() => {
+        transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [liveTranscripts]);
+
+    // 컴포넌트 언마운트 시 녹음 정리
+    useEffect(() => {
+        return () => {
+            if (mediaRecorderRef.current?.state !== 'inactive') {
+                mediaRecorderRef.current?.stop();
+            }
+        };
+    }, []);
+
+    // ── 사용자 타일 클릭 (녹음 요청) ────────────────────────────────
+    const handleTileClick = (peerId: string) => {
+        if (recordingTarget === peerId) {
+            // 이미 녹음 중 → 중지
+            sendRecordStop(peerId);
+            stopRecording();
+            return;
+        }
+        if (recordingTarget) {
+            // 다른 대상 녹음 중
+            return;
+        }
+        // 녹음 요청 전송
+        setPendingRecordRequest(peerId);
+        sendRecordRequest(peerId);
+    };
+
+    // ── 녹음 허용/거절 응답 ─────────────────────────────────────────
+    const handleAcceptIncoming = () => {
+        if (incomingRecordRequest) {
+            sendRecordAccept(incomingRecordRequest);
+            setIncomingRecordRequest(null);
+        }
+    };
+
+    const handleRejectIncoming = () => {
+        if (incomingRecordRequest) {
+            sendRecordReject(incomingRecordRequest);
+            setIncomingRecordRequest(null);
+        }
+    };
+
+    // ── 메모 ────────────────────────────────────────────────────────
     const handleNotesChange = (text: string) => {
         setNotes(text);
         setNotesSaved(false);
@@ -136,6 +472,10 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
     };
 
     const handleLeaveClick = () => {
+        if (recordingTarget) {
+            sendRecordStop(recordingTarget);
+            stopRecording();
+        }
         leaveRoom();
         handleLeave();
     };
@@ -153,6 +493,15 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
 
     return (
         <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
+            {/* 녹음 요청 모달 */}
+            {incomingRecordRequest && (
+                <RecordPermissionModal
+                    requesterName={incomingRecordRequest}
+                    onAccept={handleAcceptIncoming}
+                    onReject={handleRejectIncoming}
+                />
+            )}
+
             <header className="flex items-center justify-between px-6 py-3 bg-gray-900/80 backdrop-blur border-b border-white/5 flex-shrink-0">
                 <div className="flex items-center gap-3">
                     <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
@@ -166,7 +515,29 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
                             화면 공유 중
                         </span>
                     )}
+                    {recordingTarget && (
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-600/20 border border-red-500/40 rounded-lg text-xs text-red-300 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                            녹음 중
+                        </span>
+                    )}
+                    {pendingRecordRequest && (
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-600/20 border border-amber-500/40 rounded-lg text-xs text-amber-300 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                            녹음 요청 대기 중
+                        </span>
+                    )}
                     <span className="text-xs text-gray-500">{allParticipants.length}명 참여 중</span>
+                    {(recordingTarget || liveTranscripts.length > 0) && (
+                        <button
+                            onClick={() => setShowTranscript(v => !v)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                showTranscript ? 'bg-red-600 text-white' : 'bg-white/10 hover:bg-white/15 text-gray-300'
+                            }`}
+                        >
+                            녹취록{liveTranscripts.length > 0 ? ` (${liveTranscripts.length})` : ''}
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowNotes(v => !v)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -196,11 +567,50 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
                                     label={p.userId}
                                     isLocal={p.isLocal}
                                     isMuted={p.isLocal && !isMicOn}
+                                    isBeingRecorded={recordingTarget === p.userId}
+                                    onClick={() => handleTileClick(p.userId)}
                                 />
                             ))}
                         </div>
                     )}
                 </div>
+
+                {showTranscript && (recordingTarget || liveTranscripts.length > 0) && (
+                    <aside className="w-80 bg-gray-900/60 border-l border-white/5 flex flex-col flex-shrink-0">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                            <div className="flex items-center gap-2">
+                                {recordingTarget ? (
+                                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                                ) : (
+                                    <span className="w-2 h-2 rounded-full bg-gray-500" />
+                                )}
+                                <span className="text-sm font-semibold text-white">
+                                    {recordingTarget ? '실시간 녹취록' : '녹취록'}
+                                </span>
+                            </div>
+                            <span className="text-[10px] text-gray-500">
+                                {recordingTarget ? '녹음 중 · 10초 간격' : '녹음 종료'}
+                            </span>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                            {liveTranscripts.length === 0 ? (
+                                <p className="text-xs text-gray-600 text-center mt-8">
+                                    {recordingTarget ? '음성을 인식하는 중...' : '녹취 내용이 없습니다.'}
+                                </p>
+                            ) : (
+                                liveTranscripts.map((text, i) => (
+                                    <div key={i} className="flex gap-2">
+                                        <span className="flex-shrink-0 text-[10px] text-gray-600 mt-0.5 tabular-nums w-5 text-right">
+                                            {i + 1}
+                                        </span>
+                                        <p className="text-sm text-gray-300 leading-relaxed">{text}</p>
+                                    </div>
+                                ))
+                            )}
+                            <div ref={transcriptEndRef} />
+                        </div>
+                    </aside>
+                )}
 
                 {showNotes && (
                     <aside className="w-72 bg-gray-900/60 border-l border-white/5 flex flex-col p-4 flex-shrink-0">
@@ -255,6 +665,25 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
                     <span>{isScreenSharing ? '공유 중지' : '화면 공유'}</span>
                 </ControlBtn>
 
+                {recordingTarget && (
+                    <>
+                        <div className="w-px h-8 bg-white/10 mx-1" />
+                        <ControlBtn
+                            onClick={() => {
+                                sendRecordStop(recordingTarget);
+                                stopRecording();
+                            }}
+                            danger
+                            title="녹음 중지"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <rect x="6" y="6" width="12" height="12" rx="2" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} />
+                            </svg>
+                            <span>녹음 중지</span>
+                        </ControlBtn>
+                    </>
+                )}
+
                 <div className="w-px h-8 bg-white/10 mx-1" />
 
                 <ControlBtn onClick={handleLeaveClick} danger title="회의 나가기">
@@ -273,15 +702,19 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
 interface RoomInfo {
     type: 'ONLINE' | 'OFFLINE';
     name: string;
+    status: string;
     hostId: number;
     controllerId: number | null;
     activeMeetingId: number | null;
     activeChatId: number | null;
     summary: string | null;
+    note: string | null;
+    transcript: string | null;
 }
 
 export default function RoomPage({ roomId }: { roomId: number }) {
     const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
+    const router = useRouter();
 
     useEffect(() => {
         roomApi.getById(roomId)
@@ -289,16 +722,22 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                 setRoomInfo({
                     type: info.type as 'ONLINE' | 'OFFLINE',
                     name: info.name,
+                    status: info.status,
                     hostId: info.hostId,
                     controllerId: info.controllerId,
                     activeMeetingId: info.activeMeetingId ?? null,
                     activeChatId: info.activeChatId ?? null,
                     summary: info.summary ?? null,
+                    note: info.note ?? null,
+                    transcript: info.transcript ?? null,
                 });
             })
             .catch(() => {
-                // 로드 실패 시 온라인으로 폴백
-                setRoomInfo({ type: 'ONLINE', name: '', hostId: 0, controllerId: null, activeMeetingId: null, activeChatId: null, summary: null });
+                setRoomInfo({
+                    type: 'ONLINE', name: '', status: 'WAITING', hostId: 0,
+                    controllerId: null, activeMeetingId: null, activeChatId: null,
+                    summary: null, note: null, transcript: null,
+                });
             });
     }, [roomId]);
 
@@ -307,6 +746,21 @@ export default function RoomPage({ roomId }: { roomId: number }) {
             <div className="h-screen bg-gray-950 flex items-center justify-center">
                 <span className="text-gray-500 text-sm">로딩 중...</span>
             </div>
+        );
+    }
+
+    // ── 종료된 회의 뷰 ─────────────────────────────────────────────
+    if (roomInfo.status === 'ENDED') {
+        return (
+            <EndedRoomView
+                roomId={roomId}
+                roomName={roomInfo.name}
+                type={roomInfo.type}
+                note={roomInfo.note}
+                summary={roomInfo.summary}
+                transcript={roomInfo.transcript}
+                onBack={() => router.push('/choose')}
+            />
         );
     }
 
@@ -325,4 +779,152 @@ export default function RoomPage({ roomId }: { roomId: number }) {
     }
 
     return <OnlineRoomContent roomId={roomId} />;
+}
+
+// ── EndedRoomView (종료된 회의 확인 페이지) ──────────────────────────
+
+function EndedRoomView({
+    roomId,
+    roomName,
+    type,
+    note,
+    summary,
+    transcript,
+    onBack,
+}: {
+    roomId: number;
+    roomName: string;
+    type: 'ONLINE' | 'OFFLINE';
+    note: string | null;
+    summary: string | null;
+    transcript: string | null;
+    onBack: () => void;
+}) {
+    const isOnline = type === 'ONLINE';
+    // 온라인: 메모 + 녹취록 / 오프라인: 메모 + AI 요약
+    const [activeTab, setActiveTab] = useState<'memo' | 'transcript' | 'summary'>('memo');
+    const [roomSummary, setRoomSummary] = useState<string | null>(summary);
+    const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+
+    // 오프라인 회의에서 summary가 없으면 서버에서 생성 요청
+    useEffect(() => {
+        if (!isOnline && !roomSummary) {
+            setIsSummaryLoading(true);
+            roomApi.getById(roomId).then(info => {
+                if (info.summary) {
+                    setRoomSummary(info.summary);
+                }
+            }).catch(() => {}).finally(() => setIsSummaryLoading(false));
+        }
+    }, [isOnline, roomSummary, roomId]);
+
+    const tabs = isOnline
+        ? [
+            { key: 'memo' as const, label: '메모' },
+            { key: 'transcript' as const, label: '녹취록' },
+          ]
+        : [
+            { key: 'memo' as const, label: '메모' },
+            { key: 'summary' as const, label: 'AI 요약' },
+          ];
+
+    return (
+        <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col">
+            {/* Header */}
+            <header className="h-14 bg-[var(--card-bg)] border-b border-[var(--border-color)] flex items-center px-6 gap-4 flex-shrink-0">
+                <button
+                    onClick={onBack}
+                    className="p-1.5 rounded-md text-[var(--foreground)] opacity-40 hover:opacity-100 hover:bg-[var(--highlight-bg)] transition-all"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        isOnline ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                    }`}>
+                        {isOnline ? '온라인' : '오프라인'}
+                    </span>
+                    <span className="text-sm font-semibold">{roomName || `Room #${roomId}`}</span>
+                    <span className="px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-800 text-[10px] font-bold text-gray-500">
+                        종료됨
+                    </span>
+                </div>
+            </header>
+
+            {/* Tabs */}
+            <div className="flex border-b border-[var(--border-color)] bg-[var(--card-bg)]">
+                {tabs.map(tab => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`px-6 py-3 text-sm font-semibold transition-colors border-b-2 ${
+                            activeTab === tab.key
+                                ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                                : 'border-transparent text-[var(--foreground)] opacity-40 hover:opacity-70'
+                        }`}
+                    >
+                        {tab.label}
+                        {tab.key === 'summary' && isSummaryLoading && (
+                            <span className="ml-2 inline-block w-3 h-3 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+                        )}
+                    </button>
+                ))}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto">
+                {activeTab === 'memo' && (
+                    <div className="max-w-3xl mx-auto px-6 py-8">
+                        <h2 className="text-lg font-bold mb-4">회의 메모</h2>
+                        {note ? (
+                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 whitespace-pre-wrap text-sm leading-relaxed">
+                                {note}
+                            </div>
+                        ) : (
+                            <div className="text-center py-16">
+                                <p className="text-sm text-[var(--foreground)] opacity-30">작성된 메모가 없습니다.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'transcript' && (
+                    <div className="max-w-3xl mx-auto px-6 py-8">
+                        <h2 className="text-lg font-bold mb-4">녹취록</h2>
+                        {transcript ? (
+                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 whitespace-pre-wrap text-sm leading-relaxed">
+                                {transcript}
+                            </div>
+                        ) : (
+                            <div className="text-center py-16">
+                                <p className="text-sm text-[var(--foreground)] opacity-30">녹취록이 없습니다.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'summary' && (
+                    <div className="max-w-3xl mx-auto px-6 py-8">
+                        <h2 className="text-lg font-bold mb-4">AI 회의 요약</h2>
+                        {isSummaryLoading ? (
+                            <div className="text-center py-16">
+                                <div className="mx-auto w-8 h-8 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin mb-3" />
+                                <p className="text-sm text-[var(--foreground)] opacity-40">요약을 불러오는 중...</p>
+                            </div>
+                        ) : roomSummary ? (
+                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none">
+                                <div dangerouslySetInnerHTML={{ __html: roomSummary.replace(/\n/g, '<br/>') }} />
+                            </div>
+                        ) : (
+                            <div className="text-center py-16">
+                                <p className="text-sm text-[var(--foreground)] opacity-30">AI 요약이 없습니다.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 }

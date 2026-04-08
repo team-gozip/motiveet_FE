@@ -34,12 +34,20 @@ export interface PeerState {
     stream: MediaStream | null;
 }
 
+export interface RecordRequest {
+    from: string;
+}
+
 interface UseWebRTCOptions {
     roomId: number;
     onLeave?: () => void;
+    onRecordRequest?: (req: RecordRequest) => void;
+    onRecordAccept?: (from: string) => void;
+    onRecordReject?: (from: string) => void;
+    onRecordStop?: (from: string) => void;
 }
 
-export function useWebRTC({ roomId, onLeave }: UseWebRTCOptions) {
+export function useWebRTC({ roomId, onLeave, onRecordRequest, onRecordAccept, onRecordReject, onRecordStop }: UseWebRTCOptions) {
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [peers, setPeers] = useState<Map<string, PeerState>>(new Map());
     const [isMicOn, setIsMicOn] = useState(true);
@@ -222,10 +230,22 @@ export function useWebRTC({ roomId, onLeave }: UseWebRTCOptions) {
                 pendingCandidatesRef.current.set(peerId, queue);
             }
 
+        } else if (type === 'record-request') {
+            onRecordRequest?.({ from: msg.from as string });
+
+        } else if (type === 'record-accept') {
+            onRecordAccept?.(msg.from as string);
+
+        } else if (type === 'record-reject') {
+            onRecordReject?.(msg.from as string);
+
+        } else if (type === 'record-stop') {
+            onRecordStop?.(msg.from as string);
+
         } else if (type === 'leave') {
             removePeer(msg.id as string);
         }
-    }, [createPC, sendWs, sendOffer, drainCandidates, removePeer]);
+    }, [createPC, sendWs, sendOffer, drainCandidates, removePeer, onRecordRequest, onRecordAccept, onRecordReject, onRecordStop]);
 
     handleMsgRef.current = handleMessage;
 
@@ -241,13 +261,14 @@ export function useWebRTC({ roomId, onLeave }: UseWebRTCOptions) {
                 if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
                 localStreamRef.current = stream;
                 cameraTrackRef.current = stream.getVideoTracks()[0] ?? null;
-                setLocalStream(stream);
+                // 새 MediaStream 객체로 감싸서 React가 참조 변경을 감지하도록
+                setLocalStream(new MediaStream(stream.getTracks()));
             } catch {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
                     localStreamRef.current = stream;
-                    setLocalStream(stream);
+                    setLocalStream(new MediaStream(stream.getTracks()));
                     setIsCameraOn(false);
                 } catch {
                     setError('카메라/마이크 접근 권한이 필요합니다.');
@@ -292,6 +313,10 @@ export function useWebRTC({ roomId, onLeave }: UseWebRTCOptions) {
 
     const toggleCamera = useCallback(() => {
         localStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
+        // 새 MediaStream 객체로 React 재렌더 트리거
+        if (localStreamRef.current) {
+            setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+        }
         setIsCameraOn(v => !v);
     }, []);
 
@@ -351,6 +376,22 @@ export function useWebRTC({ roomId, onLeave }: UseWebRTCOptions) {
         onLeave?.();
     }, [sendWs, onLeave]);
 
+    const sendRecordRequest = useCallback((targetId: string) => {
+        sendWs({ type: 'record-request', to: targetId, from: myId.current });
+    }, [sendWs]);
+
+    const sendRecordAccept = useCallback((targetId: string) => {
+        sendWs({ type: 'record-accept', to: targetId, from: myId.current });
+    }, [sendWs]);
+
+    const sendRecordReject = useCallback((targetId: string) => {
+        sendWs({ type: 'record-reject', to: targetId, from: myId.current });
+    }, [sendWs]);
+
+    const sendRecordStop = useCallback((targetId: string) => {
+        sendWs({ type: 'record-stop', to: targetId, from: myId.current });
+    }, [sendWs]);
+
     return {
         localStream,
         peers,
@@ -364,5 +405,9 @@ export function useWebRTC({ roomId, onLeave }: UseWebRTCOptions) {
         toggleCamera,
         toggleScreenShare,
         leaveRoom,
+        sendRecordRequest,
+        sendRecordAccept,
+        sendRecordReject,
+        sendRecordStop,
     };
 }

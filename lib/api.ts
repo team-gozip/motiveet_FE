@@ -448,6 +448,7 @@ export const roomApi = {
             controllerId: number | null;
             note: string | null;
             summary: string | null;
+            transcript: string | null;
             activeMeetingId: number | null;
             activeChatId: number | null;
             createdAt: string;
@@ -491,6 +492,15 @@ export const roomApi = {
         return apiCall<{ roomId: number; content: string; updatedAt: string }>(`/rooms/${roomId}/notes`, {
             method: 'PUT',
             body: JSON.stringify({ content }),
+        });
+    },
+
+    uploadAudio: async (roomId: number, audioBlob: Blob) => {
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+        return apiCall<{ success: boolean; text: string }>(`/rooms/${roomId}/audio`, {
+            method: 'POST',
+            body: formData,
         });
     },
 
