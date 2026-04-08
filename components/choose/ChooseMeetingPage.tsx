@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { folderApi } from '@/lib/api';
@@ -17,6 +17,95 @@ interface Folder {
     createdAt: string;
 }
 
+// ── 코드로 참여 모달 ─────────────────────────────────────────────────
+
+function JoinByCodeModal({ onClose, onJoin }: { onClose: () => void; onJoin: () => void }) {
+    const [code, setCode] = useState('');
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => { inputRef.current?.focus(); }, []);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = code.trim().toUpperCase();
+        if (trimmed.length !== 9) {
+            setError('9자리 코드를 입력해주세요');
+            return;
+        }
+        setIsLoading(true);
+        setError('');
+        try {
+            await folderApi.joinByCode(trimmed);
+            onJoin();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : '유효하지 않은 초대 코드입니다');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 9);
+        setCode(val);
+        setError('');
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-xl w-full max-w-sm p-6">
+                <div className="flex items-center justify-between mb-5">
+                    <div>
+                        <h2 className="text-base font-bold text-[var(--foreground)]">초대 코드로 참여</h2>
+                        <p className="text-xs text-[var(--foreground)] opacity-40 mt-0.5">9자리 초대 코드를 입력하세요</p>
+                    </div>
+                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--highlight-bg)] text-[var(--foreground)] opacity-40 hover:opacity-100 transition-all">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={code}
+                            onChange={handleCodeChange}
+                            placeholder="예: ABC123XYZ"
+                            className={`w-full bg-[var(--background)] border rounded-xl px-4 py-3 text-center text-lg font-mono font-bold tracking-widest text-[var(--foreground)] focus:outline-none focus:ring-2 transition-all ${
+                                error
+                                    ? 'border-red-400 focus:ring-red-500/30'
+                                    : 'border-[var(--border-color)] focus:ring-indigo-500/30'
+                            }`}
+                            maxLength={9}
+                            autoComplete="off"
+                        />
+                        {error && <p className="text-xs text-red-400 mt-1.5 text-center">{error}</p>}
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border-color)] text-sm font-medium text-[var(--foreground)] opacity-60 hover:opacity-100 transition-all"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isLoading || code.length !== 9}
+                            className="flex-1 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all"
+                        >
+                            {isLoading ? '참여 중...' : '참여하기'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
 export default function ChooseMeetingPage() {
     const router = useRouter();
     const { setCurrentFolder } = useFolder();
@@ -24,6 +113,7 @@ export default function ChooseMeetingPage() {
     const [folders, setFolders] = useState<Folder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showJoinCode, setShowJoinCode] = useState(false);
 
     useEffect(() => {
         if (!isAuthenticated()) {
@@ -103,6 +193,15 @@ export default function ChooseMeetingPage() {
                         <h1 className="text-2xl font-bold text-[var(--foreground)]">그룹 선택</h1>
                         <p className="text-sm text-[var(--foreground)] opacity-40 mt-1">참여할 그룹을 선택하거나 새 그룹을 만들어 회의를 시작하세요</p>
                     </div>
+                    <button
+                        onClick={() => setShowJoinCode(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-[var(--card-bg)] border border-[var(--border-color)] hover:bg-[var(--highlight-bg)] text-[var(--foreground)] rounded-lg text-sm font-semibold transition-colors"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                        </svg>
+                        코드로 참여
+                    </button>
                 </div>
 
                 {isLoading ? (
@@ -157,6 +256,16 @@ export default function ChooseMeetingPage() {
                 <CreateFolderModal
                     onClose={() => setShowCreateModal(false)}
                     onCreated={handleFolderCreated}
+                />
+            )}
+
+            {showJoinCode && (
+                <JoinByCodeModal
+                    onClose={() => setShowJoinCode(false)}
+                    onJoin={() => {
+                        setShowJoinCode(false);
+                        loadFolders(); // 목록 갱신 — 새 그룹이 카드로 나타남
+                    }}
                 />
             )}
         </div>

@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --experimental-https --experimental-https-cert ./localhost.pem --experimental-https-key ./localhost-key.pem",
-    "dev:http": "next dev",
+    "dev": "NODE_EXTRA_CA_CERTS=$(mkcert -CAROOT)/rootCA.pem NODE_TLS_REJECT_UNAUTHORIZED=0 next dev --hostname 0.0.0.0 --experimental-https --experimental-https-cert ./localhost.pem --experimental-https-key ./localhost-key.pem",
+    "dev:http": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

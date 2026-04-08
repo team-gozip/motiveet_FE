@@ -11,26 +11,21 @@ function getAuthHeaders(request: Request): Record<string, string> {
 
 export async function GET(
     request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ folderId: string }> }
 ) {
-    const { id } = await params;
+    const { folderId } = await params;
     const { searchParams } = new URL(request.url);
-    const cursor = searchParams.get('cursor');
-    const limit = searchParams.get('limit');
-    const queryParams = new URLSearchParams();
-    if (cursor) queryParams.append('cursor', cursor);
-    if (limit) queryParams.append('limit', limit);
+    const qs = new URLSearchParams();
+    if (searchParams.get('cursor')) qs.append('cursor', searchParams.get('cursor')!);
+    if (searchParams.get('limit')) qs.append('limit', searchParams.get('limit')!);
 
     try {
         const { response, data } = await loggedFetch(
-            `${BE_URL}/chats/${id}/messages?${queryParams.toString()}`, 'GET',
+            `${BE_URL}/folders/${folderId}/rooms?${qs}`, 'GET',
             { method: 'GET', headers: getAuthHeaders(request) }
         );
         return Response.json(data, { status: response.status });
-    } catch (error) {
-        return Response.json(
-            { error: { code: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' } },
-            { status: 500 }
-        );
+    } catch {
+        return Response.json({ error: { code: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' } }, { status: 500 });
     }
 }

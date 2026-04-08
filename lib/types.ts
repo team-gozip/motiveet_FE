@@ -61,7 +61,6 @@ export interface SignupRequest {
 
 export interface SignupResponse {
   success: boolean;
-  userId: number;
 }
 
 export interface SigninRequest {
@@ -89,6 +88,7 @@ export interface StartMeetingResponse {
 export interface EndMeetingResponse {
   success: boolean;
   endedAt: string;
+  summary?: string;
 }
 
 export interface MeetingListResponse {

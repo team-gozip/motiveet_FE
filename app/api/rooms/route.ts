@@ -1,4 +1,4 @@
-import { loggedFetch } from '../../_logger';
+import { loggedFetch } from '../_logger';
 
 const BE_URL = process.env.API_URL || 'https://localhost:8000';
 
@@ -13,15 +13,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     try {
         const { response, data } = await loggedFetch(
-            `${BE_URL}/meetings/start`, 'POST',
+            `${BE_URL}/rooms`, 'POST',
             { method: 'POST', headers: getAuthHeaders(request), body: JSON.stringify(body) },
             body
         );
         return Response.json(data, { status: response.status });
-    } catch (error) {
-        return Response.json(
-            { success: false, error: { code: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' } },
-            { status: 500 }
-        );
+    } catch {
+        return Response.json({ error: { code: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' } }, { status: 500 });
     }
 }

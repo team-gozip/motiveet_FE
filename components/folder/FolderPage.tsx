@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { roomApi } from '@/lib/api';
+import { roomApi, folderApi } from '@/lib/api';
 import { useFolder } from '@/components/providers/FolderProvider';
 import { useTheme } from '@/components/common/ThemeProvider';
 import MeetingRow from './MeetingRow';
@@ -107,11 +107,14 @@ function CalendarWidget() {
 
 export default function FolderPage({ folderId }: FolderPageProps) {
     const router = useRouter();
-    const { currentFolder } = useFolder();
+    const { currentFolder, setCurrentFolder } = useFolder();
     const { theme, toggleTheme } = useTheme();
 
+    const [inviteCode, setInviteCode] = useState<string | null>(null);
+    const [codeCopied, setCodeCopied] = useState(false);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [accessDenied, setAccessDenied] = useState(false);
     const [activeTab, setActiveTab] = useState<'ONLINE' | 'OFFLINE' | 'ALL'>('ALL');
     const [search, setSearch] = useState('');
     const [showTypeModal, setShowTypeModal] = useState(false);
@@ -122,8 +125,12 @@ export default function FolderPage({ folderId }: FolderPageProps) {
         try {
             const resp = await roomApi.list(folderId);
             setRooms(resp.items);
-        } catch (e) {
-            console.error('Failed to load rooms:', e);
+        } catch (e: unknown) {
+            const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+            // BE: "Folder not found or access denied" (404) 또는 네트워크 외 에러
+            if (msg.includes('not found') || msg.includes('access denied') || msg.includes('권한')) {
+                setAccessDenied(true);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -131,7 +138,31 @@ export default function FolderPage({ folderId }: FolderPageProps) {
 
     useEffect(() => {
         loadRooms();
-    }, [loadRooms]);
+        // 초대 코드 조회 (접근 권한 없으면 silently fail)
+        folderApi.getInviteCode(folderId)
+            .then(r => setInviteCode(r.inviteCode))
+            .catch(() => {});
+        // 멤버로 참여한 경우 currentFolder가 null일 수 있으므로 목록에서 찾아 설정
+        if (!currentFolder || currentFolder.folderId !== folderId) {
+            folderApi.list().then(resp => {
+                const found = resp.items.find(f => f.folderId === folderId);
+                if (found) setCurrentFolder(found);
+            }).catch(() => {});
+        }
+    }, [loadRooms, folderId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // 접근 권한 없으면 /choose로 리다이렉트
+    useEffect(() => {
+        if (accessDenied) router.replace('/choose');
+    }, [accessDenied, router]);
+
+    const copyCode = () => {
+        if (!inviteCode) return;
+        navigator.clipboard.writeText(inviteCode).then(() => {
+            setCodeCopied(true);
+            setTimeout(() => setCodeCopied(false), 2000);
+        });
+    };
 
     const handleRoomCreated = (roomId: number) => {
         setPendingRoomType(null);
@@ -157,6 +188,14 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     const onlineCount = rooms.filter(r => r.type === 'ONLINE').length;
     const offlineCount = rooms.filter(r => r.type === 'OFFLINE').length;
     const activeCount = rooms.filter(r => r.status === 'ACTIVE').length;
+
+    if (accessDenied) {
+        return (
+            <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+                <span className="text-sm text-[var(--foreground)] opacity-30">접근 권한이 없습니다. 이동 중...</span>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -185,6 +224,18 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
+                    {inviteCode && (
+                        <button
+                            onClick={copyCode}
+                            title="그룹 초대 코드 복사"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--card-bg)] border border-[var(--border-color)] hover:bg-[var(--highlight-bg)] rounded-lg text-xs font-mono font-semibold tracking-widest text-[var(--foreground)] opacity-60 hover:opacity-100 transition-all"
+                        >
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            {codeCopied ? '복사됨!' : inviteCode}
+                        </button>
+                    )}
                     <button
                         onClick={toggleTheme}
                         className="p-2 rounded-md hover:bg-[var(--highlight-bg)] transition-colors text-[var(--foreground)] opacity-50 hover:opacity-100"

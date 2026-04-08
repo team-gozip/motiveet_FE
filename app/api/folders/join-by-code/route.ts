@@ -10,15 +10,12 @@ export async function POST(request: Request) {
 
     try {
         const { response, data } = await loggedFetch(
-            `${BE_URL}/chats/messages`, 'POST',
+            `${BE_URL}/folders/join-by-code`, 'POST',
             { method: 'POST', headers, body: JSON.stringify(body) },
             body
         );
         return Response.json(data, { status: response.status });
-    } catch (error) {
-        return Response.json(
-            { error: { code: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' } },
-            { status: 500 }
-        );
+    } catch {
+        return Response.json({ error: { code: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' } }, { status: 500 });
     }
 }

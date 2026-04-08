@@ -111,7 +111,7 @@ async function apiCall<T>(
 
 export const authApi = {
     signup: async (data: { username: string; password: string }) => {
-        return apiCall<{ success: boolean; userId: number }>('/auth/signup', {
+        return apiCall<{ success: boolean }>('/auth/signup', {
             method: 'POST',
             body: JSON.stringify(data),
         });
@@ -198,7 +198,7 @@ export const meetingApi = {
     },
 
     end: async (meetingId: number, memo?: string) => {
-        return apiCall<{ success: boolean; summary?: string }>(`/meetings/${meetingId}/end`, {
+        return apiCall<{ success: boolean; endedAt: string; summary?: string }>(`/meetings/${meetingId}/end`, {
             method: 'POST',
             body: JSON.stringify({ memo: memo || null }),
         });
@@ -218,13 +218,11 @@ export const meetingApi = {
             success: boolean;
             subject: {
                 subjectId: number;
-                chatId: number;
+                meetingId: number;
+                chatId: number | null;
                 text: string;
-                files: string[];
-            };
-            suggestions?: string[];
-            summary?: string;
-            transcript?: string;
+                createdAt: string;
+            } | null;
             timestamp?: string;
             newTopics?: string[];
         }>(`/meetings/${meetingId}/audio`, {
@@ -393,6 +391,17 @@ export const folderApi = {
             body: JSON.stringify({ name, description: description || null }),
         });
     },
+
+    joinByCode: async (code: string) => {
+        return apiCall<{ folderId: number; name: string; alreadyMember: boolean }>('/folders/join-by-code', {
+            method: 'POST',
+            body: JSON.stringify({ code }),
+        });
+    },
+
+    getInviteCode: async (folderId: number) => {
+        return apiCall<{ inviteCode: string }>(`/folders/${folderId}/invite-code`);
+    },
 };
 
 // ── Room API ────────────────────────────────────────────────────
@@ -484,4 +493,5 @@ export const roomApi = {
             body: JSON.stringify({ content }),
         });
     },
+
 };

@@ -4,15 +4,10 @@ const BE_URL = process.env.API_URL || 'https://localhost:8000';
 
 export async function POST(request: Request) {
     const body = await request.json();
-    const authHeader = request.headers.get('Authorization');
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (authHeader) headers['Authorization'] = authHeader;
-
     try {
         const { response, data } = await loggedFetch(
-            `${BE_URL}/auth/signin`, 'POST',
-            { method: 'POST', headers, body: JSON.stringify(body) },
-            body
+            `${BE_URL}/auth/refresh`, 'POST',
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
         );
         return Response.json(data, { status: response.status });
     } catch (error) {
