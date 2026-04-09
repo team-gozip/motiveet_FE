@@ -3,8 +3,18 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWebRTC, RecordRequest } from '@/hooks/useWebRTC';
-import { roomApi } from '@/lib/api';
+import { roomApi, meetingApi, getAccessToken } from '@/lib/api';
 import OfflineRoomPage from './OfflineRoomPage';
+import ChatInterface from '@/components/main/ChatInterface';
+
+function getCurrentUserId(): number | null {
+    const token = getAccessToken();
+    if (!token) return null;
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return Number(payload.sub ?? payload.user_id ?? payload.id ?? null);
+    } catch { return null; }
+}
 
 // ── VideoTile ────────────────────────────────────────────────────────
 
@@ -280,38 +290,70 @@ function RecordPermissionModal({
 
 // ── OnlineRoomContent ────────────────────────────────────────────────
 
-function OnlineRoomContent({ roomId }: { roomId: number }) {
+function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number }) {
     const router = useRouter();
+    const isHost = getCurrentUserId() === hostId;
+
+    // ── 기본 상태 ────────────────────────────────────────────────────
     const [notes, setNotes] = useState('');
     const [notesSaved, setNotesSaved] = useState(false);
-    const [showNotes, setShowNotes] = useState(false);
     const [isLeavingRoom, setIsLeavingRoom] = useState(false);
+    const [isEndingRoom, setIsEndingRoom] = useState(false);
     const notesSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+    // ── 하단 패널 ────────────────────────────────────────────────────
+    const [bottomTab, setBottomTab] = useState<'transcript' | 'chat' | 'memo'>('transcript');
+    const [bottomHeight, setBottomHeight] = useState(260);
+    const [chatId, setChatId] = useState<number | null>(null);
+    const isDraggingRef = useRef(false);
+    const dragStartYRef = useRef(0);
+    const dragStartHeightRef = useRef(0);
+    const chatRef = useRef<any>(null);
+
     // ── 녹음 상태 ───────────────────────────────────────────────────
-    // 내가 녹음 중인 대상 (상대방 userId)
     const [recordingTarget, setRecordingTarget] = useState<string | null>(null);
-    // 나에게 녹음 요청이 온 경우 (요청자 userId)
     const [incomingRecordRequest, setIncomingRecordRequest] = useState<string | null>(null);
-    // 녹음 요청을 보내고 대기 중
     const [pendingRecordRequest, setPendingRecordRequest] = useState<string | null>(null);
-    // 실시간 텍스트 변환 결과 (녹음자에게 표시)
-    const [liveTranscripts, setLiveTranscripts] = useState<string[]>([]);
-    const [showTranscript, setShowTranscript] = useState(false);
+    // 유저별 녹취록: userId → 텍스트 배열
+    const [userTranscripts, setUserTranscripts] = useState<Map<string, string[]>>(new Map());
+    const [selectedTranscriptUser, setSelectedTranscriptUser] = useState<string | null>(null);
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // ── 노트 로드 ───────────────────────────────────────────────────
+    // ── 초기 로드 ───────────────────────────────────────────────────
     useEffect(() => {
         roomApi.getById(roomId).then(info => {
             if (info.note) setNotes(info.note);
-            if (info.transcript) {
-                setLiveTranscripts([info.transcript.trim()]);
-            }
         }).catch(() => {});
+        // AI 채팅용 전용 chatId
+        meetingApi.getMe().then(m => setChatId(m.chatId)).catch(() => {});
     }, [roomId]);
+
+    // ── 드래그 리사이즈 ──────────────────────────────────────────────
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDraggingRef.current) return;
+            const delta = dragStartYRef.current - e.clientY;
+            const newH = Math.max(120, Math.min(520, dragStartHeightRef.current + delta));
+            setBottomHeight(newH);
+        };
+        const handleMouseUp = () => { isDraggingRef.current = false; };
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, []);
+
+    const handleDragStart = (e: React.MouseEvent) => {
+        isDraggingRef.current = true;
+        dragStartYRef.current = e.clientY;
+        dragStartHeightRef.current = bottomHeight;
+        e.preventDefault();
+    };
 
     const handleLeave = useCallback(async () => {
         if (isLeavingRoom) return;
@@ -381,14 +423,19 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
 
             const recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
             recorder.ondataavailable = (e) => {
-                console.log('[RoomRecording] ondataavailable, size:', e.data.size);
                 if (e.data.size > 0) {
                     const audioBlob = new Blob([e.data], { type: 'audio/webm' });
                     roomApi.uploadAudio(roomId, audioBlob)
                         .then(res => {
-                            console.log('[RoomRecording] Server response:', res);
                             if (res.text && res.text.trim()) {
-                                setLiveTranscripts(prev => [...prev, res.text]);
+                                setUserTranscripts(prev => {
+                                    const next = new Map(prev);
+                                    const existing = next.get(targetPeerId) ?? [];
+                                    next.set(targetPeerId, [...existing, res.text]);
+                                    return next;
+                                });
+                                setSelectedTranscriptUser(prev => prev ?? targetPeerId);
+                                setBottomTab('transcript');
                             }
                         })
                         .catch(err => console.error('[RoomRecording] Upload failed:', err));
@@ -399,7 +446,6 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
         };
 
         recordChunk();
-        setShowTranscript(true);
 
         if (chunkIntervalRef.current) clearInterval(chunkIntervalRef.current);
         chunkIntervalRef.current = setInterval(() => {
@@ -434,7 +480,7 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
     // 실시간 텍스트 자동 스크롤
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [liveTranscripts]);
+    }, [userTranscripts]);
 
     // 컴포넌트 언마운트 시 녹음 정리
     useEffect(() => {
@@ -500,6 +546,18 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
         handleLeave();
     };
 
+    const handleEndRoom = async () => {
+        if (isEndingRoom || !window.confirm('회의를 종료하시겠습니까?')) return;
+        setIsEndingRoom(true);
+        if (recordingTarget) {
+            sendRecordStop(recordingTarget);
+            stopRecording();
+        }
+        leaveRoom();
+        try { await roomApi.end(roomId); } catch { /* ignore */ }
+        router.push('/choose');
+    };
+
     const allParticipants = [
         { userId: myUserId, stream: localStream, isLocal: true },
         ...Array.from(peers.values()).map(p => ({ ...p, isLocal: false })),
@@ -510,6 +568,12 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
         : allParticipants.length <= 4
             ? 'grid-cols-2'
             : 'grid-cols-3';
+
+    const recordedUsers = Array.from(userTranscripts.keys());
+    const currentTranscripts = selectedTranscriptUser
+        ? (userTranscripts.get(selectedTranscriptUser) ?? [])
+        : [];
+    const totalTranscriptCount = Array.from(userTranscripts.values()).reduce((s, a) => s + a.length, 0);
 
     return (
         <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
@@ -522,6 +586,7 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
                 />
             )}
 
+            {/* ── 헤더 ────────────────────────────────────────────── */}
             <header className="flex items-center justify-between px-6 py-3 bg-gray-900/80 backdrop-blur border-b border-white/5 flex-shrink-0">
                 <div className="flex items-center gap-3">
                     <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
@@ -548,35 +613,18 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
                         </span>
                     )}
                     <span className="text-xs text-gray-500">{allParticipants.length}명 참여 중</span>
-                    {(recordingTarget || liveTranscripts.length > 0) && (
-                        <button
-                            onClick={() => setShowTranscript(v => !v)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                showTranscript ? 'bg-red-600 text-white' : 'bg-white/10 hover:bg-white/15 text-gray-300'
-                            }`}
-                        >
-                            녹취록{liveTranscripts.length > 0 ? ` (${liveTranscripts.length})` : ''}
-                        </button>
-                    )}
-                    <button
-                        onClick={() => setShowNotes(v => !v)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                            showNotes ? 'bg-indigo-600 text-white' : 'bg-white/10 hover:bg-white/15 text-gray-300'
-                        }`}
-                    >
-                        메모
-                    </button>
                 </div>
             </header>
 
-            <div className="flex flex-1 min-h-0">
-                <div className="flex-1 flex items-center justify-center p-6 min-h-0">
+            {/* ── Body: 비디오 + 드래그 + 하단 패널 ─────────────── */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+
+                {/* 비디오 그리드 */}
+                <div className="flex-1 flex items-center justify-center p-4 min-h-0 overflow-hidden">
                     {error ? (
                         <div className="text-center">
                             <p className="text-red-400 text-sm mb-3">{error}</p>
-                            <button onClick={handleLeaveClick} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm">
-                                나가기
-                            </button>
+                            <button onClick={handleLeaveClick} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm">나가기</button>
                         </div>
                     ) : (
                         <div className={`grid ${gridCols} gap-4 w-full h-full mx-auto`}>
@@ -595,60 +643,142 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
                     )}
                 </div>
 
-                {showTranscript && (recordingTarget || liveTranscripts.length > 0) && (
-                    <aside className="w-80 bg-gray-900/60 border-l border-white/5 flex flex-col flex-shrink-0">
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-                            <div className="flex items-center gap-2">
-                                {recordingTarget ? (
-                                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                ) : (
-                                    <span className="w-2 h-2 rounded-full bg-gray-500" />
-                                )}
-                                <span className="text-sm font-semibold text-white">
-                                    {recordingTarget ? '실시간 녹취록' : '녹취록'}
-                                </span>
-                            </div>
-                            <span className="text-[10px] text-gray-500">
-                                {recordingTarget ? '녹음 중 · 10초 간격' : '녹음 종료'}
-                            </span>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                            {liveTranscripts.length === 0 ? (
-                                <p className="text-xs text-gray-600 text-center mt-8">
-                                    {recordingTarget ? '음성을 인식하는 중...' : '녹취 내용이 없습니다.'}
-                                </p>
-                            ) : (
-                                liveTranscripts.map((text, i) => (
-                                    <div key={i} className="flex gap-2">
-                                        <span className="flex-shrink-0 text-[10px] text-gray-600 mt-0.5 tabular-nums w-5 text-right">
-                                            {i + 1}
-                                        </span>
-                                        <p className="text-sm text-gray-300 leading-relaxed">{text}</p>
-                                    </div>
-                                ))
-                            )}
-                            <div ref={transcriptEndRef} />
-                        </div>
-                    </aside>
-                )}
+                {/* ── 드래그 핸들 ─────────────────────────────────── */}
+                <div
+                    onMouseDown={handleDragStart}
+                    className="flex-shrink-0 h-2 cursor-ns-resize bg-white/5 hover:bg-indigo-500/30 transition-colors flex items-center justify-center group"
+                    title="드래그하여 크기 조절"
+                >
+                    <div className="w-10 h-0.5 rounded-full bg-white/20 group-hover:bg-indigo-400 transition-colors" />
+                </div>
 
-                {showNotes && (
-                    <aside className="w-72 bg-gray-900/60 border-l border-white/5 flex flex-col p-4 flex-shrink-0">
-                        <div className="flex items-center justify-between mb-3">
-                            <span className="text-sm font-semibold text-white">회의 메모</span>
-                            {notesSaved && <span className="text-xs text-emerald-400">저장됨</span>}
-                        </div>
-                        <textarea
-                            value={notes}
-                            onChange={(e) => handleNotesChange(e.target.value)}
-                            placeholder="회의 내용을 여기에 적어두세요..."
-                            className="flex-1 bg-gray-800/60 border border-white/10 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 resize-none"
-                        />
-                        <p className="text-xs text-gray-600 mt-2">1.5초 후 자동 저장</p>
-                    </aside>
-                )}
+                {/* ── 하단 패널 ───────────────────────────────────── */}
+                <div
+                    className="flex-shrink-0 flex flex-col bg-gray-900 border-t border-white/5"
+                    style={{ height: bottomHeight }}
+                >
+                    {/* 탭 바 */}
+                    <div className="flex-shrink-0 flex items-center border-b border-white/10 bg-gray-900/80">
+                        {(['transcript', 'chat', 'memo'] as const).map(tab => (
+                            <button
+                                key={tab}
+                                onClick={() => setBottomTab(tab)}
+                                className={`relative px-4 py-2.5 text-xs font-semibold transition-colors ${
+                                    bottomTab === tab ? 'text-white' : 'text-gray-500 hover:text-gray-300'
+                                }`}
+                            >
+                                {tab === 'transcript' ? '녹취록' : tab === 'chat' ? 'AI 채팅' : '메모'}
+                                {tab === 'transcript' && totalTranscriptCount > 0 && (
+                                    <span className="ml-1 px-1 py-0.5 text-[9px] bg-red-500/20 text-red-400 rounded font-bold">
+                                        {totalTranscriptCount}
+                                    </span>
+                                )}
+                                {bottomTab === tab && (
+                                    <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-indigo-500 rounded-full" />
+                                )}
+                            </button>
+                        ))}
+                        <div className="flex-1" />
+                        {recordingTarget && (
+                            <div className="flex items-center gap-1.5 px-3 text-[10px] text-red-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                녹음 중 · 10초 간격
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 패널 콘텐츠 */}
+                    <div className="flex-1 overflow-hidden">
+
+                        {/* 녹취록 탭 */}
+                        {bottomTab === 'transcript' && (
+                            <div className="h-full flex flex-col">
+                                {/* 유저 선택 바 */}
+                                <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/5 overflow-x-auto">
+                                    {recordedUsers.length === 0 && !recordingTarget ? (
+                                        <span className="text-[10px] text-gray-600">참가자 영상을 클릭하여 녹음을 시작하세요</span>
+                                    ) : (
+                                        <>
+                                            {recordedUsers.map(uid => (
+                                                <button
+                                                    key={uid}
+                                                    onClick={() => setSelectedTranscriptUser(uid)}
+                                                    className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                                                        selectedTranscriptUser === uid
+                                                            ? 'bg-indigo-600 text-white'
+                                                            : 'bg-white/10 text-gray-400 hover:bg-white/15 hover:text-gray-200'
+                                                    }`}
+                                                >
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${recordingTarget === uid ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'}`} />
+                                                    {uid === myUserId ? '나' : uid.split('_')[0]}
+                                                    <span className="opacity-50">({userTranscripts.get(uid)?.length ?? 0})</span>
+                                                </button>
+                                            ))}
+                                            {recordingTarget && !recordedUsers.includes(recordingTarget) && (
+                                                <div className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-red-400 bg-red-500/10">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                                    {recordingTarget.split('_')[0]} 인식 중...
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* 녹취 내용 */}
+                                <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                                    {!selectedTranscriptUser ? (
+                                        <div className="flex items-center justify-center h-full">
+                                            <p className="text-xs text-gray-600 text-center">
+                                                {recordingTarget ? '음성을 인식하는 중...' : '위에서 참가자를 선택하세요'}
+                                            </p>
+                                        </div>
+                                    ) : currentTranscripts.length === 0 ? (
+                                        <p className="text-xs text-gray-600 text-center mt-6">
+                                            {recordingTarget === selectedTranscriptUser ? '음성을 인식하는 중...' : '아직 녹취 내용이 없습니다.'}
+                                        </p>
+                                    ) : (
+                                        currentTranscripts.map((text, i) => (
+                                            <div key={i} className="flex gap-2.5">
+                                                <span className="flex-shrink-0 text-[10px] text-gray-600 mt-0.5 tabular-nums w-5 text-right">{i + 1}</span>
+                                                <p className="text-sm text-gray-300 leading-relaxed">{text}</p>
+                                            </div>
+                                        ))
+                                    )}
+                                    <div ref={transcriptEndRef} />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* AI 채팅 탭 */}
+                        {bottomTab === 'chat' && (
+                            <div className="h-full">
+                                <ChatInterface
+                                    ref={chatRef}
+                                    chatId={chatId}
+                                    isMeetingActive={true}
+                                />
+                            </div>
+                        )}
+
+                        {/* 메모 탭 */}
+                        {bottomTab === 'memo' && (
+                            <div className="h-full flex flex-col p-3 gap-1">
+                                {notesSaved && (
+                                    <span className="text-[10px] text-emerald-400 text-right">저장됨</span>
+                                )}
+                                <textarea
+                                    value={notes}
+                                    onChange={(e) => handleNotesChange(e.target.value)}
+                                    placeholder="회의 내용을 여기에 적어두세요..."
+                                    className="flex-1 bg-gray-800/60 border border-white/10 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 resize-none"
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
+            {/* ── 컨트롤 바 ───────────────────────────────────────── */}
             <div className="flex-shrink-0 flex items-center justify-center gap-3 py-4 px-6 bg-gray-900/80 backdrop-blur border-t border-white/5">
                 <ControlBtn onClick={toggleMic} active={isMicOn} title={isMicOn ? '마이크 끄기' : '마이크 켜기'}>
                     {isMicOn ? (
@@ -689,10 +819,7 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
                     <>
                         <div className="w-px h-8 bg-white/10 mx-1" />
                         <ControlBtn
-                            onClick={() => {
-                                sendRecordStop(recordingTarget);
-                                stopRecording();
-                            }}
+                            onClick={() => { sendRecordStop(recordingTarget); stopRecording(); }}
                             danger
                             title="녹음 중지"
                         >
@@ -706,7 +833,16 @@ function OnlineRoomContent({ roomId }: { roomId: number }) {
 
                 <div className="w-px h-8 bg-white/10 mx-1" />
 
-                <ControlBtn onClick={handleLeaveClick} danger title="회의 나가기">
+                {isHost && (
+                    <ControlBtn onClick={handleEndRoom} danger title="회의 종료">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <span>회의 종료</span>
+                    </ControlBtn>
+                )}
+
+                <ControlBtn onClick={handleLeaveClick} active={false} title="나가기">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
@@ -798,7 +934,7 @@ export default function RoomPage({ roomId }: { roomId: number }) {
         );
     }
 
-    return <OnlineRoomContent roomId={roomId} />;
+    return <OnlineRoomContent roomId={roomId} hostId={roomInfo.hostId} />;
 }
 
 // ── EndedRoomView (종료된 회의 확인 페이지) ──────────────────────────

@@ -34,19 +34,7 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
   // Initial check for any active meeting on mount (optional, if we want to restore state)
   // For now, we rely on user action or passed props, but checking API is safer.
   const checkActiveMeeting = async () => {
-    try {
-      const current = await meetingApi.getCurrent();
-      if (current && !current.endedAt) {
-        // User requested to automatically end meetings that were left open
-        await meetingApi.end(current.meetingId);
-        console.log(`Automatically ended meeting ${current.meetingId} that was left active.`);
-      }
-      // Ensure state is clean
-      setActiveMeetingId(null);
-      setActiveChatId(null);
-    } catch (e) {
-      // Quietly handle initial check (e.g. not logged in)
-    }
+    // No-op: meetings must only be ended by pressing the "회의 종료" button.
   };
 
   const stopRecordingCleanup = () => {

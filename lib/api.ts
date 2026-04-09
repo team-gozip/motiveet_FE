@@ -474,6 +474,12 @@ export const roomApi = {
         });
     },
 
+    end: async (roomId: number) => {
+        return apiCall<{ success: boolean }>(`/rooms/${roomId}/end`, {
+            method: 'POST',
+        });
+    },
+
     assignController: async (roomId: number, userId: number) => {
         return apiCall<{ controllerId: number }>(`/rooms/${roomId}/controller`, {
             method: 'POST',
