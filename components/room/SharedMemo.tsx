@@ -102,7 +102,7 @@ export default function SharedMemo({ roomId }: SharedMemoProps) {
     if (isLoading) {
         return (
             <div className="h-full flex items-center justify-center">
-                <div className="text-[var(--foreground)] opacity-30 text-xs">노트 불러오는 중...</div>
+                <div className="text-[var(--foreground)] text-[var(--text-tertiary)] text-xs">노트 불러오는 중...</div>
             </div>
         );
     }
@@ -113,7 +113,7 @@ export default function SharedMemo({ roomId }: SharedMemoProps) {
             <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] bg-[var(--highlight-bg)]">
                 <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full transition-colors ${isEditing ? 'bg-indigo-400 animate-pulse' : 'bg-emerald-500'}`} />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--foreground)] opacity-50">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--foreground)] text-[var(--text-secondary)]">
                         {isEditing ? 'EDITING' : 'PREVIEW'}
                     </span>
                 </div>
@@ -127,7 +127,7 @@ export default function SharedMemo({ roomId }: SharedMemoProps) {
                     {saveStatus === 'error' && (
                         <span className="text-[10px] text-red-500 font-semibold">저장 실패 ⚠</span>
                     )}
-                    <span className="text-[10px] text-[var(--foreground)] opacity-30">공유 · 마크다운</span>
+                    <span className="text-[10px] text-[var(--foreground)] text-[var(--text-tertiary)]">공유 · 마크다운</span>
                 </div>
             </div>
 

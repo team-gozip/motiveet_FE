@@ -22,7 +22,6 @@ export default function SignupForm() {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        // Clear error when user types
         if (errors[name]) {
             setErrors(prev => ({ ...prev, [name]: '' }));
         }
@@ -61,7 +60,6 @@ export default function SignupForm() {
             });
 
             if (response.success) {
-                // Auto-login after successful signup
                 const loginResponse = await authApi.signin({
                     username: formData.username,
                     password: formData.password,
@@ -79,7 +77,6 @@ export default function SignupForm() {
                 setErrors({
                     submit: '이미 가입된 아이디입니다. 로그인 페이지로 이동합니다...',
                 });
-                // 2초 후 로그인 페이지로 이동
                 setTimeout(() => {
                     router.push('/login');
                 }, 2000);
@@ -95,7 +92,7 @@ export default function SignupForm() {
 
     return (
         <div className="w-full max-w-md mx-auto">
-            <div className="bg-[var(--card-bg)] rounded-3xl shadow-2xl p-10 border border-[var(--border-color)] backdrop-blur-sm">
+            <div className="bg-[var(--card-bg)] rounded-2xl shadow-xl p-10 border border-[var(--border-color)]">
                 <div className="flex justify-center mb-8">
                     <img
                         src={theme === 'dark' ? '/white_logo1.png' : '/dark_logo1.png'}
@@ -103,9 +100,12 @@ export default function SignupForm() {
                         className="h-20 w-auto object-contain transition-transform duration-300 hover:scale-105"
                     />
                 </div>
-                <h2 className="text-2xl font-bold text-center mb-8 text-[var(--foreground)] tracking-tight">
+                <h2 className="text-2xl font-bold text-center mb-2 text-[var(--foreground)] tracking-tight">
                     회원가입
                 </h2>
+                <p className="text-sm text-[var(--text-secondary)] text-center mb-8">
+                    계정을 만들고 AI 회의 어시스턴트를 시작하세요
+                </p>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                     <Input
@@ -142,8 +142,8 @@ export default function SignupForm() {
                     />
 
                     {errors.submit && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                            <p className="text-sm text-red-500 text-center">{errors.submit}</p>
+                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                            <p className="text-sm text-[var(--danger)] text-center font-medium">{errors.submit}</p>
                         </div>
                     )}
 
@@ -157,9 +157,9 @@ export default function SignupForm() {
                         {isLoading ? '처리 중...' : '가입하기'}
                     </Button>
 
-                    <p className="text-center text-sm text-[var(--foreground)] opacity-60">
+                    <p className="text-center text-sm text-[var(--text-secondary)]">
                         이미 계정이 있으신가요?{' '}
-                        <a href="/login" className="text-blue-500 hover:text-blue-600 hover:underline font-medium transition-colors">
+                        <a href="/login" className="text-[var(--accent-primary)] hover:underline font-semibold transition-colors">
                             로그인
                         </a>
                     </p>

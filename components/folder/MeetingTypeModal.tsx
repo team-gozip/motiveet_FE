@@ -16,7 +16,7 @@ export default function MeetingTypeModal({ onClose, onSelect }: MeetingTypeModal
                     <h3 className="text-lg font-bold text-[var(--foreground)]">회의 방식 선택</h3>
                     <button
                         onClick={onClose}
-                        className="p-1.5 rounded-md text-[var(--foreground)] opacity-40 hover:opacity-100 transition-opacity"
+                        className="p-1.5 rounded-md text-[var(--foreground)] text-[var(--text-secondary)] hover:opacity-100 transition-opacity"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -39,7 +39,7 @@ export default function MeetingTypeModal({ onClose, onSelect }: MeetingTypeModal
                             <p className="text-sm font-bold text-[var(--foreground)] group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
                                 온라인 회의
                             </p>
-                            <p className="text-xs text-[var(--foreground)] opacity-40 mt-1">
+                            <p className="text-xs text-[var(--foreground)] text-[var(--text-secondary)] mt-1">
                                 화상·음성 연결
                             </p>
                         </div>
@@ -59,7 +59,7 @@ export default function MeetingTypeModal({ onClose, onSelect }: MeetingTypeModal
                             <p className="text-sm font-bold text-[var(--foreground)] group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors">
                                 오프라인 회의
                             </p>
-                            <p className="text-xs text-[var(--foreground)] opacity-40 mt-1">
+                            <p className="text-xs text-[var(--foreground)] text-[var(--text-secondary)] mt-1">
                                 AI 음성 녹취·분석
                             </p>
                         </div>

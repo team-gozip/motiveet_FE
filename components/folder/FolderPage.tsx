@@ -56,7 +56,7 @@ function CalendarWidget() {
         <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
-                <button onClick={prevMonth} className="p-1 rounded hover:bg-[var(--highlight-bg)] text-[var(--foreground)] opacity-40 hover:opacity-100 transition-all">
+                <button onClick={prevMonth} className="p-1 rounded hover:bg-[var(--highlight-bg)] text-[var(--foreground)] text-[var(--text-tertiary)] hover:text-[var(--foreground)] transition-all">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
@@ -64,7 +64,7 @@ function CalendarWidget() {
                 <span className="text-xs font-semibold text-[var(--foreground)]">
                     {viewYear}년 {viewMonth + 1}월
                 </span>
-                <button onClick={nextMonth} className="p-1 rounded hover:bg-[var(--highlight-bg)] text-[var(--foreground)] opacity-40 hover:opacity-100 transition-all">
+                <button onClick={nextMonth} className="p-1 rounded hover:bg-[var(--highlight-bg)] text-[var(--foreground)] text-[var(--text-tertiary)] hover:text-[var(--foreground)] transition-all">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
@@ -74,7 +74,7 @@ function CalendarWidget() {
             {/* Day headers */}
             <div className="grid grid-cols-7 mb-1">
                 {DAYS.map((d, i) => (
-                    <div key={d} className={`text-center text-[10px] font-semibold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-[var(--foreground)] opacity-30'}`}>
+                    <div key={d} className={`text-center text-[10px] font-semibold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-[var(--foreground)] text-[var(--text-tertiary)]'}`}>
                         {d}
                     </div>
                 ))}
@@ -92,7 +92,7 @@ function CalendarWidget() {
                                         ? 'text-red-400 hover:bg-[var(--highlight-bg)]'
                                         : idx % 7 === 6
                                             ? 'text-blue-400 hover:bg-[var(--highlight-bg)]'
-                                            : 'text-[var(--foreground)] opacity-60 hover:bg-[var(--highlight-bg)]'
+                                            : 'text-[var(--foreground)] text-[var(--text-secondary)] hover:bg-[var(--highlight-bg)]'
                                 }`}
                             >
                                 {d}
@@ -196,7 +196,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     if (accessDenied) {
         return (
             <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
-                <span className="text-sm text-[var(--foreground)] opacity-30">접근 권한이 없습니다. 이동 중...</span>
+                <span className="text-sm text-[var(--foreground)] text-[var(--text-tertiary)]">접근 권한이 없습니다. 이동 중...</span>
             </div>
         );
     }
@@ -222,7 +222,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                     </Link>
                     {currentFolder && (
                         <>
-                            <span className="text-[var(--foreground)] opacity-20">/</span>
+                            <span className="text-[var(--foreground)] text-[var(--text-tertiary)]">/</span>
                             <span className="text-sm font-semibold text-[var(--foreground)]">{currentFolder.name}</span>
                         </>
                     )}
@@ -232,7 +232,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                         <button
                             onClick={copyCode}
                             title="그룹 초대 코드 복사"
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--card-bg)] border border-[var(--border-color)] hover:bg-[var(--highlight-bg)] rounded-lg text-xs font-mono font-semibold tracking-widest text-[var(--foreground)] opacity-60 hover:opacity-100 transition-all"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--card-bg)] border border-[var(--border-color)] hover:bg-[var(--highlight-bg)] rounded-lg text-xs font-mono font-semibold tracking-widest text-[var(--foreground)] text-[var(--text-secondary)] hover:opacity-100 transition-all"
                         >
                             <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -242,7 +242,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                     )}
                     <button
                         onClick={toggleTheme}
-                        className="p-2 rounded-md hover:bg-[var(--highlight-bg)] transition-colors text-[var(--foreground)] opacity-50 hover:opacity-100"
+                        className="p-2 rounded-md hover:bg-[var(--highlight-bg)] transition-colors text-[var(--foreground)] text-[var(--text-secondary)] hover:text-[var(--foreground)]"
                     >
                         {theme === 'dark' ? (
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -268,7 +268,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                                 {currentFolder?.name ?? '회의실'}
                             </h1>
                             {currentFolder?.description && (
-                                <p className="text-xs text-[var(--foreground)] opacity-40 mt-0.5">{currentFolder.description}</p>
+                                <p className="text-xs text-[var(--foreground)] text-[var(--text-secondary)] mt-0.5">{currentFolder.description}</p>
                             )}
                         </div>
                         <button
@@ -284,7 +284,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
 
                     {/* Search */}
                     <div className="relative mb-4">
-                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--foreground)] opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--foreground)] text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                         <input
@@ -292,7 +292,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="회의록 검색"
-                            className="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl pl-9 pr-4 py-2.5 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder-[var(--foreground)] placeholder-opacity-25"
+                            className="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl pl-9 pr-4 py-2.5 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder-[var(--foreground)] placeholder:text-[var(--text-tertiary)]"
                         />
                     </div>
 
@@ -309,7 +309,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                                             : tab === 'OFFLINE'
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-[var(--foreground)] text-[var(--background)]'
-                                        : 'text-[var(--foreground)] opacity-40 hover:opacity-70'
+                                        : 'text-[var(--foreground)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
                                 }`}
                             >
                                 {tab === 'ALL' ? '전체' : tab === 'ONLINE' ? '온라인' : '오프라인'}
@@ -330,15 +330,15 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                     ) : filtered.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-center">
                             <div className="w-12 h-12 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center mb-4">
-                                <svg className="w-6 h-6 text-[var(--foreground)] opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-6 h-6 text-[var(--foreground)] text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                 </svg>
                             </div>
-                            <p className="text-sm text-[var(--foreground)] opacity-30 mb-1">
+                            <p className="text-sm text-[var(--foreground)] text-[var(--text-tertiary)] mb-1">
                                 {search ? '검색 결과가 없습니다' : '아직 회의실이 없습니다'}
                             </p>
                             {!search && (
-                                <p className="text-xs text-[var(--foreground)] opacity-20">
+                                <p className="text-xs text-[var(--foreground)] text-[var(--text-tertiary)]">
                                     위의 &ldquo;새 회의&rdquo; 버튼을 눌러 첫 회의를 시작하세요
                                 </p>
                             )}
@@ -375,7 +375,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
 
                     {/* Quick actions */}
                     <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
-                        <p className="text-xs font-semibold text-[var(--foreground)] opacity-40 mb-3 uppercase tracking-wider">빠른 시작</p>
+                        <p className="text-xs font-semibold text-[var(--foreground)] text-[var(--text-secondary)] mb-3 uppercase tracking-wider">빠른 시작</p>
                         <div className="space-y-2">
                             <button
                                 onClick={() => setShowTypeModal(true)}
@@ -386,7 +386,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
                                     </svg>
                                 </div>
-                                <span className="text-sm text-[var(--foreground)] opacity-60 group-hover:opacity-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">온라인 회의 시작</span>
+                                <span className="text-sm text-[var(--foreground)] text-[var(--text-secondary)] group-hover:opacity-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">온라인 회의 시작</span>
                             </button>
                             <button
                                 onClick={() => setShowTypeModal(true)}
@@ -397,7 +397,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                                     </svg>
                                 </div>
-                                <span className="text-sm text-[var(--foreground)] opacity-60 group-hover:opacity-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">오프라인 회의 시작</span>
+                                <span className="text-sm text-[var(--foreground)] text-[var(--text-secondary)] group-hover:opacity-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">오프라인 회의 시작</span>
                             </button>
                         </div>
                     </div>

@@ -2,13 +2,10 @@
 
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { chatApi } from '@/lib/api';
-import Button from '../common/Button';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useTheme } from '../common/ThemeProvider';
 
 // SQLite func.now()는 UTC를 반환하지만 Z가 없어서 JS가 로컬로 해석함
-// UTC로 강제 인식시킨 뒤 KST로 변환
 const toKST = (timestamp: string) => {
     const ts = timestamp.endsWith('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z';
     return new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' });
@@ -29,7 +26,6 @@ interface ChatInterfaceProps {
 
 const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProps, ref) {
     const { chatId, isMeetingActive } = props;
-    const { theme } = useTheme();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -51,7 +47,6 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
             if (!chatId || isLoading) return;
             setIsLoading(true);
             try {
-                // 1. Send "Topic 찾아줘" message
                 const userResponse = await chatApi.requestResearch(chatId, topic);
                 const newUserMessage: ChatMessage = {
                     messageId: userResponse.messageId,
@@ -61,7 +56,6 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                 };
                 setMessages(prev => [...prev, newUserMessage]);
 
-                // 2. Trigger AI Answer (which will handle research in BE)
                 const aiResponse = await chatApi.getAnswer(userResponse.messageId);
                 const aiMessage: ChatMessage = {
                     messageId: aiResponse.messageId,
@@ -87,21 +81,14 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
         if (!chatId) return;
 
         try {
-            console.log(`[ChatHistory] Loading history for chatId: ${chatId}`);
             const response = await chatApi.getHistory(chatId);
-            console.log('[ChatHistory] Response received:', response);
-
-            // Defensive: Check if messages exists and is an array
             if (response && Array.isArray(response.messages)) {
                 setMessages(response.messages);
-                console.log(`[ChatHistory] Loaded ${response.messages.length} messages`);
             } else {
-                console.warn('[ChatHistory] Invalid response format:', response);
                 setMessages([]);
             }
         } catch (error) {
             console.error('[ChatHistory] Failed to load chat history:', error);
-            // Don't throw, just set empty messages to prevent app crash
             setMessages([]);
         }
     };
@@ -114,7 +101,6 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
         setIsLoading(true);
 
         try {
-            // Send user message
             const userResponse = await chatApi.sendMessage(chatId, userMessage);
             const newUserMessage: ChatMessage = {
                 messageId: userResponse.messageId,
@@ -124,7 +110,6 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
             };
             setMessages(prev => [...prev, newUserMessage]);
 
-            // Get AI answer
             const aiResponse = await chatApi.getAnswer(userResponse.messageId);
             const aiMessage: ChatMessage = {
                 messageId: aiResponse.messageId,
@@ -136,7 +121,6 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
             setMessages(prev => [...prev, aiMessage]);
         } catch (error) {
             console.error('Failed to send message:', error);
-            // Add error message
             setMessages(prev => [...prev, {
                 messageId: Date.now(),
                 role: 'assistant',
@@ -157,29 +141,41 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
 
     if (!chatId) {
         return (
-            <div className="h-full flex items-center justify-center bg-zinc-900/50">
-                <p className="text-zinc-500 text-sm">채팅을 불러오는 중...</p>
+            <div className="h-full flex items-center justify-center bg-[var(--card-bg)]">
+                <p className="text-[var(--text-tertiary)] text-sm">채팅을 불러오는 중...</p>
             </div>
         );
     }
 
     return (
-        <div className="h-full flex flex-col bg-[var(--card-bg)] border border-[var(--border-color)] transition-colors duration-300">
+        <div className="h-full flex flex-col bg-[var(--card-bg)] transition-colors duration-300">
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {messages.length === 0 && !isLoading && (
+                    <div className="h-full flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="w-10 h-10 rounded-full bg-[var(--accent-primary)]/10 flex items-center justify-center mx-auto mb-3">
+                                <svg className="w-5 h-5 text-[var(--accent-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                            </div>
+                            <p className="text-xs text-[var(--text-tertiary)]">AI에게 무엇이든 물어보세요</p>
+                        </div>
+                    </div>
+                )}
                 {messages.map((message) => (
                     <div
                         key={message.messageId}
                         className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                         <div
-                            className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-2 rounded-2xl shadow-sm ${message.role === 'user'
-                                ? 'bg-[var(--accent-primary)] text-[#1A1A1A]'
-                                : `bg-white dark:bg-[var(--highlight-bg)] ${theme === 'dark' ? 'text-[#E5E7EB]' : 'text-black'} border border-zinc-200 dark:border-[var(--border-color)] shadow-sm`
+                            className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl ${message.role === 'user'
+                                ? 'bg-[var(--accent-primary)] text-white rounded-br-md'
+                                : 'bg-[var(--highlight-bg)] text-[var(--foreground)] border border-[var(--border-color)] rounded-bl-md'
                                 }`}
                         >
                             {message.text && (
-                                <div className="text-sm prose dark:prose-invert prose-slate max-w-none prose-p:leading-relaxed font-medium">
+                                <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-1">
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
                                         components={{
@@ -188,7 +184,7 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                                                     href={href}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="text-indigo-500 underline cursor-pointer hover:text-indigo-400"
+                                                    className="text-indigo-400 underline cursor-pointer hover:text-indigo-300"
                                                 >
                                                     {children}
                                                 </a>
@@ -206,10 +202,9 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                                     className="mt-2 rounded-lg max-w-full"
                                 />
                             )}
-                            <p
-                                className={`text-[10px] mt-1 font-medium ${message.role === 'user' ? 'text-[#1A1A1A]' : theme === 'dark' ? 'text-[var(--foreground)]/40' : 'text-zinc-600'
-                                    }`}
-                            >
+                            <p className={`text-[10px] mt-1.5 ${
+                                message.role === 'user' ? 'text-white/70' : 'text-[var(--text-tertiary)]'
+                            }`}>
                                 {toKST(message.timestamp)}
                             </p>
                         </div>
@@ -217,11 +212,11 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                 ))}
                 {isLoading && (
                     <div className="flex justify-start">
-                        <div className="bg-[var(--highlight-bg)] border border-[var(--border-color)] px-4 py-2 rounded-2xl shadow-sm">
-                            <div className="flex space-x-2">
-                                <div className="w-1.5 h-1.5 bg-[var(--accent-primary)]/50 rounded-full animate-bounce"></div>
-                                <div className="w-1.5 h-1.5 bg-[var(--accent-primary)]/50 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                                <div className="w-1.5 h-1.5 bg-[var(--accent-primary)]/50 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="bg-[var(--highlight-bg)] border border-[var(--border-color)] px-4 py-3 rounded-2xl rounded-bl-md">
+                            <div className="flex space-x-1.5">
+                                <div className="w-2 h-2 bg-[var(--accent-primary)]/40 rounded-full animate-bounce"></div>
+                                <div className="w-2 h-2 bg-[var(--accent-primary)]/40 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
+                                <div className="w-2 h-2 bg-[var(--accent-primary)]/40 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
                             </div>
                         </div>
                     </div>
@@ -230,23 +225,25 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
             </div>
 
             {/* Input */}
-            <div className="border-t border-[var(--border-color)] p-4 bg-[var(--background)]">
-                <div className="flex items-end space-x-2">
+            <div className="border-t border-[var(--border-color)] p-3 bg-[var(--background)]">
+                <div className="flex items-end gap-2">
                     <textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyPress={handleKeyPress}
                         placeholder="메시지를 입력하세요..."
-                        className="flex-1 px-4 py-3 bg-[var(--highlight-bg)]/50 text-[var(--foreground)] border border-[var(--border-color)] rounded-xl resize-none focus:ring-2 focus:ring-[var(--accent-primary)]/20 focus:border-[var(--accent-primary)]/30 outline-none transition-all placeholder:text-[var(--foreground)] placeholder:opacity-20 text-sm"
+                        className="flex-1 px-3.5 py-2.5 bg-[var(--highlight-bg)] text-[var(--foreground)] border border-[var(--border-color)] rounded-xl resize-none focus:ring-2 focus:ring-[var(--accent-primary)]/20 focus:border-[var(--accent-primary)]/40 outline-none transition-all placeholder:text-[var(--text-tertiary)] text-sm"
                         rows={1}
                         disabled={isLoading}
                     />
                     <button
                         onClick={handleSend}
                         disabled={!input.trim() || isLoading}
-                        className="px-6 py-3 bg-[var(--accent-primary)] hover:opacity-90 disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:opacity-50 text-white rounded-xl transition-all font-bold self-end shadow-md hover:shadow-lg active:scale-95 text-sm"
+                        className="p-2.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-30 text-white rounded-xl transition-all active:scale-95"
                     >
-                        전송
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
                     </button>
                 </div>
             </div>

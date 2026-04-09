@@ -23,22 +23,22 @@ const toKST = (ts: string) => {
     }).replace(/\. /g, '.').replace(/\.$/, '');
 };
 
-const statusLabel: Record<Room['status'], { text: string; color: string }> = {
-    WAITING: { text: '대기 중', color: 'text-amber-500' },
-    ACTIVE:  { text: '진행 중', color: 'text-emerald-500' },
-    ENDED:   { text: '종료됨',  color: 'text-[var(--foreground)] opacity-30' },
+const statusLabel: Record<Room['status'], { text: string; color: string; bg: string }> = {
+    WAITING: { text: '대기 중', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/20' },
+    ACTIVE:  { text: '진행 중', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
+    ENDED:   { text: '종료됨',  color: 'text-[var(--text-tertiary)]', bg: 'bg-[var(--highlight-bg)]' },
 };
 
 export default function MeetingRow({ room, onClick }: MeetingRowProps) {
-    const { text: statusText, color: statusColor } = statusLabel[room.status];
+    const { text: statusText, color: statusColor, bg: statusBg } = statusLabel[room.status];
 
     return (
         <div
             onClick={onClick}
-            className="flex items-center px-4 py-3.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-indigo-400/40 hover:bg-[var(--highlight-bg)] cursor-pointer transition-all group"
+            className="flex items-center px-4 py-3.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-[var(--accent-primary)]/30 hover:shadow-sm cursor-pointer transition-all group"
         >
             {/* Type icon */}
-            <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mr-3 ${
+            <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center mr-3 ${
                 room.type === 'ONLINE'
                     ? 'bg-indigo-100 dark:bg-indigo-900/30'
                     : 'bg-emerald-100 dark:bg-emerald-900/30'
@@ -56,18 +56,18 @@ export default function MeetingRow({ room, onClick }: MeetingRowProps) {
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-[var(--foreground)] truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
+                <p className="text-sm font-semibold text-[var(--foreground)] truncate group-hover:text-[var(--accent-primary)] transition-colors">
                     {room.name}
                 </p>
-                <p className="text-xs text-[var(--foreground)] opacity-35 mt-0.5">
+                <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
                     {toKST(room.createdAt)}
                 </p>
             </div>
 
             {/* Status + arrow */}
             <div className="flex items-center gap-3 flex-shrink-0">
-                <span className={`text-xs font-medium ${statusColor}`}>{statusText}</span>
-                <svg className="w-4 h-4 text-[var(--foreground)] opacity-20 group-hover:opacity-60 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusColor} ${statusBg}`}>{statusText}</span>
+                <svg className="w-4 h-4 text-[var(--text-tertiary)] group-hover:text-[var(--accent-primary)] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
             </div>

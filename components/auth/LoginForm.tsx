@@ -56,7 +56,7 @@ export default function LoginForm() {
 
     return (
         <div className="w-full max-w-md mx-auto">
-            <div className="bg-[var(--card-bg)] rounded-3xl shadow-2xl p-10 border border-[var(--border-color)] backdrop-blur-sm">
+            <div className="bg-[var(--card-bg)] rounded-2xl shadow-xl p-10 border border-[var(--border-color)]">
                 <div className="flex justify-center mb-8">
                     <img
                         src={theme === 'dark' ? '/white_logo1.png' : '/dark_logo1.png'}
@@ -64,9 +64,12 @@ export default function LoginForm() {
                         className="h-20 w-auto object-contain transition-transform duration-300 hover:scale-105"
                     />
                 </div>
-                <h2 className="text-2xl font-bold text-center mb-8 text-[var(--foreground)] tracking-tight">
-                    로그인
+                <h2 className="text-2xl font-bold text-center mb-2 text-[var(--foreground)] tracking-tight">
+                    다시 오신 것을 환영해요
                 </h2>
+                <p className="text-sm text-[var(--text-secondary)] text-center mb-8">
+                    계정에 로그인하여 회의를 시작하세요
+                </p>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                     <Input
@@ -90,8 +93,8 @@ export default function LoginForm() {
                     />
 
                     {error && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                            <p className="text-sm text-red-500 text-center">{error}</p>
+                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                            <p className="text-sm text-[var(--danger)] text-center font-medium">{error}</p>
                         </div>
                     )}
 
@@ -105,9 +108,9 @@ export default function LoginForm() {
                         {isLoading ? '로그인 중...' : '로그인'}
                     </Button>
 
-                    <p className="text-center text-sm text-[var(--foreground)] opacity-60">
+                    <p className="text-center text-sm text-[var(--text-secondary)]">
                         계정이 없으신가요?{' '}
-                        <a href="/signup" className="text-blue-500 hover:text-blue-600 hover:underline font-medium transition-colors">
+                        <a href="/signup" className="text-[var(--accent-primary)] hover:underline font-semibold transition-colors">
                             회원가입
                         </a>
                     </p>

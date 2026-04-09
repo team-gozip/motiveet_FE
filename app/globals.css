@@ -2,40 +2,43 @@
 @plugin "@tailwindcss/typography";
 
 :root {
-  /* Light Theme - Slightly darker for comfort */
-  --background: #f1f5f9;
-  /* Slate-100: Replaces white to reduce eye strain */
-  --foreground: #0f172a;
-  /* Slate-900 */
+  /* Light Theme — Warm, approachable, high-readability */
+  --background: #f8fafc;
+  --foreground: #1e293b;
   --card-bg: #ffffff;
-  /* Cards stand out on the darker background */
   --border-color: #e2e8f0;
-  /* Slate-200 */
   --header-bg: #ffffff;
-  --sidebar-bg: #f8fafc;
-  /* Slightly different from main background */
-  --accent-primary: #334155;
-  /* Deep Slate */
-  --highlight-bg: #eef3f5;
-  /* Cloud Blue point */
+  --sidebar-bg: #f1f5f9;
+  --accent-primary: #4f46e5;
+  /* Indigo-600: Vibrant, accessible action color */
+  --accent-hover: #4338ca;
+  --highlight-bg: #f1f5f9;
+  --text-secondary: #64748b;
+  /* Slate-500: Readable secondary text */
+  --text-tertiary: #94a3b8;
+  /* Slate-400: Subtle but still legible */
+  --success: #059669;
+  --danger: #dc2626;
+  --warning: #d97706;
 }
 
 .dark {
-  /* Dark Theme - VS Code Style Neutral Charcoal */
-  --background: #121212;
-  /* Deep neutral gray, similar to VS Code dark mode */
-  --foreground: #e4e4e7;
-  /* Zinc-200 */
-  --card-bg: #1e1e1e;
-  /* Slightly lighter gray for elements */
-  --border-color: #2d2d2d;
-  /* Clean, logical border */
-  --header-bg: #121212;
-  --sidebar-bg: #121212;
-  --accent-primary: #a1a1aa;
-  /* Zinc-400: Neutral accent */
-  --highlight-bg: #2d2d30;
-  /* VS Code item highlight / hover color */
+  /* Dark Theme — Comfortable, reduced eye strain */
+  --background: #0f1117;
+  --foreground: #e2e8f0;
+  --card-bg: #1a1d27;
+  --border-color: #2a2d3a;
+  --header-bg: #0f1117;
+  --sidebar-bg: #0f1117;
+  --accent-primary: #818cf8;
+  /* Indigo-400: Vivid on dark backgrounds */
+  --accent-hover: #a5b4fc;
+  --highlight-bg: #1e2130;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --success: #34d399;
+  --danger: #f87171;
+  --warning: #fbbf24;
 }
 
 @theme inline {
@@ -61,7 +64,7 @@ body {
   -webkit-line-clamp: 2;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — theme-aware */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -72,12 +75,59 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: var(--border-color);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: var(--text-tertiary);
+}
+
+/* Smooth scrollbar for hidden-scrollbar sections */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Focus-visible utility for keyboard navigation */
+*:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Smooth page transitions */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out both;
+}
+
+.animation-delay-200 {
+  animation-delay: 200ms;
+}
+
+.animation-delay-300 {
+  animation-delay: 300ms;
+}
+
+.animation-delay-500 {
+  animation-delay: 500ms;
 }
 
 /* Markdown Preview Corrections */
@@ -130,7 +180,6 @@ body {
   color: var(--accent-primary);
 }
 
-/* Red for bold */
 .markdown-preview em {
   font-style: italic;
   opacity: 0.8;

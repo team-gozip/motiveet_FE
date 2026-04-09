@@ -209,7 +209,7 @@ export default function OfflineRoomPage({
                     </span>
                 )}
             </div>
-            <span className="text-[10px] text-[var(--foreground)] opacity-30 font-medium">{role}</span>
+            <span className="text-[10px] text-[var(--foreground)] text-[var(--text-tertiary)] font-medium">{role}</span>
         </header>
     );
 
@@ -229,23 +229,23 @@ export default function OfflineRoomPage({
                         <div className="h-full flex items-center justify-center p-8">
                             <div className="text-center space-y-6 max-w-sm">
                                 <div className="mx-auto w-20 h-20 rounded-full flex items-center justify-center bg-[var(--highlight-bg)]">
-                                    <svg className="w-10 h-10 text-[var(--foreground)] opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-10 h-10 text-[var(--foreground)] text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                     </svg>
                                 </div>
                                 <div className="space-y-2">
                                     <p className="text-base font-bold text-[var(--foreground)]">회의가 진행 중입니다</p>
-                                    <p className="text-sm text-[var(--foreground)] opacity-50 leading-relaxed">
+                                    <p className="text-sm text-[var(--foreground)] text-[var(--text-secondary)] leading-relaxed">
                                         오프라인 회의는 생성자만 참여할 수 있습니다.<br />
                                         회의가 종료되면 AI 요약을 확인할 수 있습니다.
                                     </p>
                                 </div>
-                                <div className="flex items-center justify-center gap-2 text-xs text-[var(--foreground)] opacity-30">
+                                <div className="flex items-center justify-center gap-2 text-xs text-[var(--foreground)] text-[var(--text-tertiary)]">
                                     <div className="flex gap-1">
                                         {[1, 2, 3].map(i => (
                                             <div
                                                 key={i}
-                                                className="w-1.5 h-1.5 rounded-full bg-[var(--foreground)] opacity-40 animate-bounce"
+                                                className="w-1.5 h-1.5 rounded-full bg-[var(--foreground)] text-[var(--text-secondary)] animate-bounce"
                                                 style={{ animationDelay: `${i * 0.2}s` }}
                                             />
                                         ))}
@@ -259,7 +259,7 @@ export default function OfflineRoomPage({
                         <div className="h-full flex items-center justify-center p-8">
                             <div className="text-center space-y-4">
                                 <div className="mx-auto w-10 h-10 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
-                                <p className="text-sm text-[var(--foreground)] opacity-50">AI 회의 요약을 불러오는 중...</p>
+                                <p className="text-sm text-[var(--foreground)] text-[var(--text-secondary)]">AI 회의 요약을 불러오는 중...</p>
                             </div>
                         </div>
                     ) : nonHostSummary ? (
@@ -270,13 +270,13 @@ export default function OfflineRoomPage({
                         <div className="h-full flex items-center justify-center p-8">
                             <div className="text-center space-y-4 max-w-sm">
                                 <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center bg-[var(--highlight-bg)]">
-                                    <svg className="w-8 h-8 text-[var(--foreground)] opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-8 h-8 text-[var(--foreground)] text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
                                 </div>
                                 <div>
                                     <p className="text-sm font-semibold text-[var(--foreground)]">아직 요약이 없습니다</p>
-                                    <p className="text-xs text-[var(--foreground)] opacity-40 mt-1 leading-relaxed">
+                                    <p className="text-xs text-[var(--foreground)] text-[var(--text-secondary)] mt-1 leading-relaxed">
                                         생성자가 회의를 시작하고 종료하면<br />AI 요약이 여기에 표시됩니다.
                                     </p>
                                 </div>
@@ -289,7 +289,7 @@ export default function OfflineRoomPage({
                 <div className="flex-shrink-0 h-14 bg-[var(--background)] border-t border-[var(--border-color)] flex items-center justify-end px-6">
                     <button
                         onClick={handleLeaveClick}
-                        className="text-sm font-semibold text-[var(--foreground)] opacity-50 hover:opacity-100 transition-opacity"
+                        className="text-sm font-semibold text-[var(--foreground)] text-[var(--text-secondary)] hover:opacity-100 transition-opacity"
                     >
                         나가기
                     </button>
@@ -312,7 +312,7 @@ export default function OfflineRoomPage({
                 {/* 왼쪽: AI 채팅 (항상 표시, 항상 사용 가능) */}
                 <div className="flex-shrink-0 w-72 flex flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--card-bg)]">
                     <div className="flex-shrink-0 px-4 py-2.5 border-b border-[var(--border-color)]">
-                        <span className="text-[10px] font-bold text-[var(--foreground)] opacity-40 uppercase tracking-wider">
+                        <span className="text-[10px] font-bold text-[var(--foreground)] text-[var(--text-secondary)] uppercase tracking-wider">
                             AI 채팅
                         </span>
                     </div>
@@ -334,7 +334,7 @@ export default function OfflineRoomPage({
                             {/* 추출된 주제 strip */}
                             <div className="flex-shrink-0 border-b border-[var(--border-color)]">
                                 <div className="px-4 py-2 border-b border-[var(--border-color)] bg-[var(--highlight-bg)]">
-                                    <span className="text-[10px] font-bold text-[var(--foreground)] opacity-40 uppercase tracking-wider">
+                                    <span className="text-[10px] font-bold text-[var(--foreground)] text-[var(--text-secondary)] uppercase tracking-wider">
                                         추출된 주제
                                     </span>
                                 </div>
@@ -347,7 +347,7 @@ export default function OfflineRoomPage({
 
                             {/* 메모장 (회의 중에는 고정) */}
                             <div className="flex-shrink-0 px-4 py-2 border-b border-[var(--border-color)] bg-[var(--highlight-bg)]">
-                                <span className="text-[10px] font-bold text-[var(--foreground)] opacity-40 uppercase tracking-wider">
+                                <span className="text-[10px] font-bold text-[var(--foreground)] text-[var(--text-secondary)] uppercase tracking-wider">
                                     메모장
                                 </span>
                             </div>
@@ -365,7 +365,7 @@ export default function OfflineRoomPage({
                                     className={`px-5 py-3 text-[11px] font-bold border-r border-[var(--border-color)] transition-all ${
                                         postMeetingView === 'memo'
                                             ? 'text-[var(--foreground)] bg-[var(--card-bg)]'
-                                            : 'text-[var(--foreground)] opacity-30 hover:opacity-60'
+                                            : 'text-[var(--foreground)] text-[var(--text-tertiary)] hover:opacity-60'
                                     }`}
                                 >
                                     메모장
@@ -378,8 +378,8 @@ export default function OfflineRoomPage({
                                         postMeetingView === 'summary'
                                             ? 'text-[var(--foreground)] bg-[var(--card-bg)]'
                                             : hostSummary || isSummaryLoading
-                                                ? 'text-[var(--foreground)] opacity-30 hover:opacity-60'
-                                                : 'text-[var(--foreground)] opacity-15 cursor-not-allowed'
+                                                ? 'text-[var(--foreground)] text-[var(--text-tertiary)] hover:opacity-60'
+                                                : 'text-[var(--foreground)] text-[var(--text-tertiary)] cursor-not-allowed'
                                     }`}
                                 >
                                     AI 회의 요약
@@ -417,7 +417,7 @@ export default function OfflineRoomPage({
                     }`}
                 >
                     <svg
-                        className={`w-3.5 h-3.5 ${isMicOn ? 'text-red-500' : 'text-[var(--foreground)] opacity-30'}`}
+                        className={`w-3.5 h-3.5 ${isMicOn ? 'text-red-500' : 'text-[var(--foreground)] text-[var(--text-tertiary)]'}`}
                         fill="none" viewBox="0 0 24 24" stroke="currentColor"
                     >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -461,7 +461,7 @@ export default function OfflineRoomPage({
                     <button
                         onClick={handleStartMeeting}
                         disabled={isStartingMeeting}
-                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 shadow-sm shadow-indigo-500/20"
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:text-[var(--text-secondary)] shadow-sm shadow-indigo-500/20"
                     >
                         {isStartingMeeting ? '시작 중...' : '회의 시작'}
                     </button>
@@ -469,7 +469,7 @@ export default function OfflineRoomPage({
                     <button
                         onClick={handleEndMeeting}
                         disabled={isEndingMeeting}
-                        className="px-4 py-1.5 text-red-500 border border-red-200 dark:border-red-900/40 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                        className="px-4 py-1.5 text-red-500 border border-red-200 dark:border-red-900/40 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg text-xs font-semibold transition-colors disabled:text-[var(--text-secondary)]"
                     >
                         {isEndingMeeting ? '종료 중...' : '회의 종료'}
                     </button>
@@ -480,7 +480,7 @@ export default function OfflineRoomPage({
                 {/* 나가기 */}
                 <button
                     onClick={handleLeaveClick}
-                    className="text-sm font-semibold text-[var(--foreground)] opacity-50 hover:opacity-100 transition-opacity"
+                    className="text-sm font-semibold text-[var(--foreground)] text-[var(--text-secondary)] hover:opacity-100 transition-opacity"
                 >
                     나가기
                 </button>

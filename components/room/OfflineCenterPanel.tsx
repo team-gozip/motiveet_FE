@@ -77,10 +77,10 @@ export default function OfflineCenterPanel({ meetingId, roomName, isActive }: Of
     if (!isActive) {
         return (
             <div className="h-14 flex items-center px-5 gap-2">
-                <svg className="w-3.5 h-3.5 text-[var(--foreground)] opacity-20 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-[var(--foreground)] text-[var(--text-tertiary)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="text-xs text-[var(--foreground)] opacity-30">
+                <span className="text-xs text-[var(--foreground)] text-[var(--text-tertiary)]">
                     회의를 시작하면 AI가 대화를 분석해 주제를 자동 추출합니다
                 </span>
             </div>
@@ -100,7 +100,7 @@ export default function OfflineCenterPanel({ meetingId, roomName, isActive }: Of
                         />
                     ))}
                 </div>
-                <span className="text-xs text-[var(--foreground)] opacity-40">
+                <span className="text-xs text-[var(--foreground)] text-[var(--text-secondary)]">
                     대화를 감지하면 주제를 자동 추출합니다 (약 30초)
                 </span>
             </div>
@@ -131,7 +131,7 @@ export default function OfflineCenterPanel({ meetingId, roomName, isActive }: Of
                     {suggestions.map((sug, i) => (
                         <span
                             key={`${sug}-${i}`}
-                            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold border border-[var(--border-color)] bg-[var(--highlight-bg)] text-[var(--foreground)] opacity-70 hover:opacity-100 transition-opacity whitespace-nowrap"
+                            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold border border-[var(--border-color)] bg-[var(--highlight-bg)] text-[var(--foreground)] text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-opacity whitespace-nowrap"
                         >
                             {sug}
                         </span>

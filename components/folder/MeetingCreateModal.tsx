@@ -78,7 +78,7 @@ export default function MeetingCreateModal({ folderId, roomType, onClose, onCrea
                 <div className="bg-[var(--highlight-bg)] min-h-[140px] max-h-[220px] overflow-y-auto">
                     {participants.length === 0 && (
                         <div className="flex items-center justify-center h-20">
-                            <p className="text-xs text-[var(--foreground)] opacity-25">
+                            <p className="text-xs text-[var(--foreground)] text-[var(--text-tertiary)]">
                                 초대할 인원을 아래에서 추가하세요
                             </p>
                         </div>
@@ -87,14 +87,14 @@ export default function MeetingCreateModal({ folderId, roomType, onClose, onCrea
                         <div key={p.id} className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border-color)] last:border-0">
                             {/* Avatar */}
                             <div className="w-9 h-9 rounded-lg bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center flex-shrink-0">
-                                <span className="text-sm font-bold text-[var(--foreground)] opacity-50">
+                                <span className="text-sm font-bold text-[var(--foreground)] text-[var(--text-secondary)]">
                                     {p.username.charAt(0).toUpperCase()}
                                 </span>
                             </div>
                             <span className="flex-1 text-sm text-[var(--foreground)]">{p.username}</span>
                             <button
                                 onClick={() => handleRemoveParticipant(p.id)}
-                                className="p-1 text-[var(--foreground)] opacity-25 hover:opacity-70 transition-opacity"
+                                className="p-1 text-[var(--foreground)] text-[var(--text-tertiary)] hover:opacity-70 transition-opacity"
                             >
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -113,7 +113,7 @@ export default function MeetingCreateModal({ folderId, roomType, onClose, onCrea
                             onChange={(e) => setAddInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleAddParticipant()}
                             placeholder="아이디로 인원 추가"
-                            className="flex-1 bg-transparent text-sm text-[var(--foreground)] outline-none placeholder-[var(--foreground)] placeholder-opacity-20"
+                            className="flex-1 bg-transparent text-sm text-[var(--foreground)] outline-none placeholder-[var(--foreground)] placeholder-text-[var(--text-tertiary)]"
                         />
                         {addInput.trim() && (
                             <button
@@ -135,21 +135,21 @@ export default function MeetingCreateModal({ folderId, roomType, onClose, onCrea
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                             <span className={`w-2 h-2 rounded-full ${roomType === 'ONLINE' ? 'bg-indigo-500' : 'bg-emerald-500'}`} />
-                            <span className="text-xs text-[var(--foreground)] opacity-40">
+                            <span className="text-xs text-[var(--foreground)] text-[var(--text-secondary)]">
                                 {roomType === 'ONLINE' ? '온라인 회의' : '오프라인 회의'}
                             </span>
                         </div>
                         <div className="flex gap-2">
                             <button
                                 onClick={onClose}
-                                className="px-4 py-2 text-sm text-[var(--foreground)] opacity-50 hover:opacity-100 transition-opacity"
+                                className="px-4 py-2 text-sm text-[var(--foreground)] text-[var(--text-secondary)] hover:opacity-100 transition-opacity"
                             >
                                 취소
                             </button>
                             <button
                                 onClick={handleSubmit}
                                 disabled={isLoading || !title.trim()}
-                                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-lg text-sm font-semibold transition-colors"
+                                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:text-[var(--text-secondary)] text-white rounded-lg text-sm font-semibold transition-colors"
                             >
                                 {isLoading ? '생성 중...' : '회의 시작'}
                             </button>
