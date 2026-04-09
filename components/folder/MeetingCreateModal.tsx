@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { roomApi } from '@/lib/api';
+import { useState, useEffect, useMemo } from 'react';
+import { roomApi, folderApi, getAccessToken } from '@/lib/api';
 
 interface MeetingCreateModalProps {
     folderId: number;
@@ -10,31 +10,65 @@ interface MeetingCreateModalProps {
     onCreated: (roomId: number) => void;
 }
 
-interface Participant {
-    id: string;
-    username: string;
+interface Member {
+    userId: number;
+    username: string | null;
+    name: string | null;
+}
+
+function getCurrentUserId(): number | null {
+    const token = getAccessToken();
+    if (!token) return null;
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return Number(payload.sub ?? payload.user_id ?? payload.id ?? null);
+    } catch { return null; }
 }
 
 export default function MeetingCreateModal({ folderId, roomType, onClose, onCreated }: MeetingCreateModalProps) {
     const [title, setTitle] = useState('');
-    const [participants, setParticipants] = useState<Participant[]>([]);
-    const [addInput, setAddInput] = useState('');
+    const [members, setMembers] = useState<Member[]>([]);
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [search, setSearch] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isMembersLoading, setIsMembersLoading] = useState(true);
     const [error, setError] = useState('');
 
-    const handleAddParticipant = () => {
-        const username = addInput.trim();
-        if (!username) return;
-        if (participants.some(p => p.username === username)) {
-            setAddInput('');
-            return;
-        }
-        setParticipants(prev => [...prev, { id: String(Date.now()), username }]);
-        setAddInput('');
+    const myUserId = getCurrentUserId();
+
+    useEffect(() => {
+        folderApi.getMembers(folderId)
+            .then(resp => {
+                setMembers(resp.members.filter(m => m.userId !== myUserId));
+            })
+            .catch(() => {})
+            .finally(() => setIsMembersLoading(false));
+    }, [folderId, myUserId]);
+
+    const filtered = useMemo(() => {
+        if (!search.trim()) return members;
+        const q = search.toLowerCase();
+        return members.filter(m =>
+            (m.username?.toLowerCase().includes(q)) ||
+            (m.name?.toLowerCase().includes(q))
+        );
+    }, [members, search]);
+
+    const toggleMember = (userId: number) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(userId)) next.delete(userId);
+            else next.add(userId);
+            return next;
+        });
     };
 
-    const handleRemoveParticipant = (id: string) => {
-        setParticipants(prev => prev.filter(p => p.id !== id));
+    const selectAll = () => {
+        if (selectedIds.size === members.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(members.map(m => m.userId)));
+        }
     };
 
     const handleSubmit = async () => {
@@ -47,109 +81,181 @@ export default function MeetingCreateModal({ folderId, roomType, onClose, onCrea
         try {
             const room = await roomApi.create(folderId, title.trim(), roomType);
             await roomApi.join(room.roomId);
+            // 선택한 멤버에게 초대 알림
+            if (selectedIds.size > 0) {
+                await roomApi.invite(room.roomId, Array.from(selectedIds));
+            }
             onCreated(room.roomId);
-        } catch (e) {
+        } catch {
             setError('회의 생성에 실패했습니다. 다시 시도해주세요.');
         } finally {
             setIsLoading(false);
         }
     };
 
+    const isOnline = roomType === 'ONLINE';
+    const accentColor = isOnline ? 'indigo' : 'emerald';
+
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
             onClick={(e) => e.target === e.currentTarget && onClose()}
         >
-            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-                {/* Title input — dark header style */}
-                <div className="bg-[var(--foreground)] px-5 py-4">
+            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+
+                {/* ── Header ─────────────────────────────── */}
+                <div className={`px-6 py-5 ${isOnline ? 'bg-gradient-to-r from-indigo-600 to-indigo-500' : 'bg-gradient-to-r from-emerald-600 to-emerald-500'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-white/60" />
+                            <span className="text-xs font-medium text-white/80">
+                                {isOnline ? '온라인 회의' : '오프라인 회의'}
+                            </span>
+                        </div>
+                        <button onClick={onClose} className="p-1 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
                     <input
                         type="text"
                         value={title}
                         onChange={(e) => { setTitle(e.target.value); setError(''); }}
                         onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                        placeholder="회의 주제 입력"
-                        className="w-full bg-transparent text-[var(--background)] text-base font-semibold placeholder-[var(--background)]/40 outline-none"
+                        placeholder="회의 주제를 입력하세요"
+                        className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white text-sm font-medium placeholder-white/40 outline-none focus:bg-white/15 focus:border-white/30 transition-all"
                         autoFocus
                     />
                 </div>
 
-                {/* Participants */}
-                <div className="bg-[var(--highlight-bg)] min-h-[140px] max-h-[220px] overflow-y-auto">
-                    {participants.length === 0 && (
-                        <div className="flex items-center justify-center h-20">
-                            <p className="text-xs text-[var(--foreground)] text-[var(--text-tertiary)]">
-                                초대할 인원을 아래에서 추가하세요
-                            </p>
-                        </div>
-                    )}
-                    {participants.map(p => (
-                        <div key={p.id} className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border-color)] last:border-0">
-                            {/* Avatar */}
-                            <div className="w-9 h-9 rounded-lg bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center flex-shrink-0">
-                                <span className="text-sm font-bold text-[var(--foreground)] text-[var(--text-secondary)]">
-                                    {p.username.charAt(0).toUpperCase()}
-                                </span>
+                {/* ── Member selection (온라인만) ─────────── */}
+                {isOnline && (
+                    <div className="border-b border-[var(--border-color)]">
+                        <div className="px-6 pt-4 pb-2">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-[var(--foreground)]">
+                                        참가자 초대
+                                    </span>
+                                    {selectedIds.size > 0 && (
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-${accentColor}-100 dark:bg-${accentColor}-900/30 text-${accentColor}-600 dark:text-${accentColor}-400`}>
+                                            {selectedIds.size}명 선택
+                                        </span>
+                                    )}
+                                </div>
+                                {members.length > 0 && (
+                                    <button
+                                        onClick={selectAll}
+                                        className="text-[10px] font-medium text-indigo-500 hover:text-indigo-600 transition-colors"
+                                    >
+                                        {selectedIds.size === members.length ? '전체 해제' : '전체 선택'}
+                                    </button>
+                                )}
                             </div>
-                            <span className="flex-1 text-sm text-[var(--foreground)]">{p.username}</span>
-                            <button
-                                onClick={() => handleRemoveParticipant(p.id)}
-                                className="p-1 text-[var(--foreground)] text-[var(--text-tertiary)] hover:opacity-70 transition-opacity"
-                            >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
+
+                            {/* Search */}
+                            {members.length > 3 && (
+                                <div className="relative mb-3">
+                                    <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                    <input
+                                        type="text"
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        placeholder="이름 또는 아이디로 검색"
+                                        className="w-full bg-[var(--highlight-bg)] border border-[var(--border-color)] rounded-lg pl-8 pr-3 py-2 text-xs text-[var(--foreground)] outline-none focus:ring-1 focus:ring-indigo-500/30 placeholder:text-[var(--text-tertiary)]"
+                                    />
+                                </div>
+                            )}
                         </div>
-                    ))}
-                </div>
 
-                {/* Add participant */}
-                <div className="border-t-2 border-dashed border-indigo-300/40">
-                    <div className="flex items-center gap-2 px-4 py-3">
-                        <input
-                            type="text"
-                            value={addInput}
-                            onChange={(e) => setAddInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleAddParticipant()}
-                            placeholder="아이디로 인원 추가"
-                            className="flex-1 bg-transparent text-sm text-[var(--foreground)] outline-none placeholder-[var(--foreground)] placeholder-text-[var(--text-tertiary)]"
-                        />
-                        {addInput.trim() && (
-                            <button
-                                onClick={handleAddParticipant}
-                                className="text-xs font-semibold text-indigo-500 hover:text-indigo-600 transition-colors"
-                            >
-                                추가
-                            </button>
-                        )}
-                        {!addInput.trim() && (
-                            <span className="text-xs text-indigo-400 opacity-60">+ 인원 추가</span>
-                        )}
+                        {/* Member list */}
+                        <div className="max-h-[200px] overflow-y-auto px-3 pb-3">
+                            {isMembersLoading ? (
+                                <div className="flex items-center justify-center py-6">
+                                    <span className="text-xs text-[var(--text-tertiary)]">불러오는 중...</span>
+                                </div>
+                            ) : members.length === 0 ? (
+                                <div className="flex items-center justify-center py-6">
+                                    <span className="text-xs text-[var(--text-tertiary)]">그룹에 다른 멤버가 없습니다</span>
+                                </div>
+                            ) : filtered.length === 0 ? (
+                                <div className="flex items-center justify-center py-4">
+                                    <span className="text-xs text-[var(--text-tertiary)]">검색 결과가 없습니다</span>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-1.5">
+                                    {filtered.map(m => {
+                                        const selected = selectedIds.has(m.userId);
+                                        const displayName = m.name || m.username || '?';
+                                        const initials = displayName.slice(0, 1).toUpperCase();
+                                        return (
+                                            <button
+                                                key={m.userId}
+                                                onClick={() => toggleMember(m.userId)}
+                                                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all ${
+                                                    selected
+                                                        ? 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700/50 ring-1 ring-indigo-500/20'
+                                                        : 'bg-[var(--highlight-bg)] border border-transparent hover:border-[var(--border-color)]'
+                                                }`}
+                                            >
+                                                {/* Avatar */}
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold transition-colors ${
+                                                    selected
+                                                        ? 'bg-indigo-500 text-white'
+                                                        : 'bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)]'
+                                                }`}>
+                                                    {selected ? (
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    ) : initials}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className={`text-xs font-medium truncate ${selected ? 'text-indigo-700 dark:text-indigo-300' : 'text-[var(--foreground)]'}`}>
+                                                        {displayName}
+                                                    </p>
+                                                    {m.username && m.name && (
+                                                        <p className="text-[10px] text-[var(--text-tertiary)] truncate">@{m.username}</p>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
 
-                {/* Error + Actions */}
-                <div className="px-4 py-4 border-t border-[var(--border-color)] bg-[var(--card-bg)]">
+                {/* ── Footer ─────────────────────────────── */}
+                <div className="px-6 py-4 bg-[var(--card-bg)]">
                     {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                            <span className={`w-2 h-2 rounded-full ${roomType === 'ONLINE' ? 'bg-indigo-500' : 'bg-emerald-500'}`} />
-                            <span className="text-xs text-[var(--foreground)] text-[var(--text-secondary)]">
-                                {roomType === 'ONLINE' ? '온라인 회의' : '오프라인 회의'}
-                            </span>
-                        </div>
+                        <span className="text-xs text-[var(--text-tertiary)]">
+                            {isOnline && selectedIds.size > 0
+                                ? `${selectedIds.size}명에게 초대 알림 발송`
+                                : isOnline
+                                    ? '참가자를 선택하지 않아도 생성 가능'
+                                    : '오프라인 회의는 초대 없이 시작됩니다'}
+                        </span>
                         <div className="flex gap-2">
                             <button
                                 onClick={onClose}
-                                className="px-4 py-2 text-sm text-[var(--foreground)] text-[var(--text-secondary)] hover:opacity-100 transition-opacity"
+                                className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-colors"
                             >
                                 취소
                             </button>
                             <button
                                 onClick={handleSubmit}
                                 disabled={isLoading || !title.trim()}
-                                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:text-[var(--text-secondary)] text-white rounded-lg text-sm font-semibold transition-colors"
+                                className={`px-5 py-2 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 ${
+                                    isOnline
+                                        ? 'bg-indigo-600 hover:bg-indigo-700'
+                                        : 'bg-emerald-600 hover:bg-emerald-700'
+                                }`}
                             >
                                 {isLoading ? '생성 중...' : '회의 시작'}
                             </button>

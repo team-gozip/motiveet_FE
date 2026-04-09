@@ -402,6 +402,12 @@ export const folderApi = {
     getInviteCode: async (folderId: number) => {
         return apiCall<{ inviteCode: string }>(`/folders/${folderId}/invite-code`);
     },
+
+    getMembers: async (folderId: number) => {
+        return apiCall<{
+            members: Array<{ userId: number; username: string | null; name: string | null }>;
+        }>(`/folders/${folderId}/members`);
+    },
 };
 
 // ── Room API ────────────────────────────────────────────────────
@@ -510,4 +516,45 @@ export const roomApi = {
         });
     },
 
+    invite: async (roomId: number, userIds: number[]) => {
+        return apiCall<{ success: boolean; invitedCount: number }>(`/rooms/${roomId}/invite`, {
+            method: 'POST',
+            body: JSON.stringify({ userIds }),
+        });
+    },
+
+};
+
+// ── Notification API ───────────────────────────────────────────
+
+export const notificationApi = {
+    list: async () => {
+        return apiCall<{
+            items: Array<{
+                id: number;
+                type: string;
+                title: string;
+                body: string | null;
+                roomId: number | null;
+                isRead: boolean;
+                createdAt: string;
+            }>;
+        }>('/notifications');
+    },
+
+    markRead: async (id: number) => {
+        return apiCall<{ success: boolean }>(`/notifications/${id}/read`, {
+            method: 'POST',
+        });
+    },
+
+    markAllRead: async () => {
+        return apiCall<{ success: boolean }>('/notifications/read-all', {
+            method: 'POST',
+        });
+    },
+
+    unreadCount: async () => {
+        return apiCall<{ count: number }>('/notifications/unread-count');
+    },
 };

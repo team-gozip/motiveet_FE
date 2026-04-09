@@ -9,6 +9,7 @@ import { useTheme } from '@/components/common/ThemeProvider';
 import MeetingRow from './MeetingRow';
 import MeetingTypeModal from './MeetingTypeModal';
 import MeetingCreateModal from './MeetingCreateModal';
+import NotificationBell from '@/components/common/NotificationBell';
 
 interface Room {
     roomId: number;
@@ -119,6 +120,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     const [search, setSearch] = useState('');
     const [showTypeModal, setShowTypeModal] = useState(false);
     const [pendingRoomType, setPendingRoomType] = useState<'ONLINE' | 'OFFLINE' | null>(null);
+    const [showBusyModal, setShowBusyModal] = useState(false);
 
     const loadRooms = useCallback(async () => {
         setIsLoading(true);
@@ -171,8 +173,12 @@ export default function FolderPage({ folderId }: FolderPageProps) {
 
     const handleRoomClick = async (room: Room) => {
         if (room.status === 'ENDED') {
-            // 종료된 회의 → 메모/녹취록/요약 확인 페이지로 이동
             router.push(`/room/${room.roomId}`);
+            return;
+        }
+        // 오프라인 회의가 진행 중이면 참여 차단
+        if (room.type === 'OFFLINE' && room.status === 'ACTIVE') {
+            setShowBusyModal(true);
             return;
         }
         try {
@@ -228,6 +234,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
+                    <NotificationBell />
                     {inviteCode && (
                         <button
                             onClick={copyCode}
@@ -423,6 +430,33 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                     onClose={() => setPendingRoomType(null)}
                     onCreated={handleRoomCreated}
                 />
+            )}
+
+            {/* Offline busy modal */}
+            {showBusyModal && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                    onClick={() => setShowBusyModal(false)}
+                >
+                    <div
+                        className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
+                            <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-sm font-semibold text-[var(--foreground)] mb-1">이미 사용중인 회의입니다</h3>
+                        <p className="text-xs text-[var(--text-secondary)] mb-5">오프라인 회의가 진행 중입니다. 회의가 종료된 후 다시 시도해주세요.</p>
+                        <button
+                            onClick={() => setShowBusyModal(false)}
+                            className="px-5 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-xl text-sm font-semibold transition-colors hover:opacity-90"
+                        >
+                            확인
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );
