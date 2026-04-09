@@ -298,8 +298,13 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
     const [notes, setNotes] = useState('');
     const [notesSaved, setNotesSaved] = useState(false);
     const [isLeavingRoom, setIsLeavingRoom] = useState(false);
-    const [isEndingRoom, setIsEndingRoom] = useState(false);
     const notesSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+    // ── 회의(meeting) 상태 ──────────────────────────────────────────
+    const [meetingId, setMeetingId] = useState<number | null>(null);
+    const [isStartingMeeting, setIsStartingMeeting] = useState(false);
+    const [isEndingMeeting, setIsEndingMeeting] = useState(false);
+    const isMeetingActive = !!meetingId;
 
     // ── 사이드 패널 ──────────────────────────────────────────────────
     const [sidePanel, setSidePanel] = useState<'transcript' | 'chat' | 'memo' | null>(null);
@@ -326,11 +331,60 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
     useEffect(() => {
         roomApi.getById(roomId).then(info => {
             if (info.note) setNotes(info.note);
+            // 이미 진행 중인 회의가 있으면 복원
+            if (info.activeMeetingId) {
+                setMeetingId(info.activeMeetingId);
+                if (info.activeChatId) setChatId(info.activeChatId);
+            }
         }).catch(() => {});
-        // AI 채팅용 전용 chatId
-        meetingApi.getMe().then(m => setChatId(m.chatId)).catch(() => {});
+        // AI 채팅용 전용 chatId (회의가 없을 때 fallback)
+        meetingApi.getMe().then(m => {
+            setChatId(prev => prev ?? m.chatId);
+        }).catch(() => {});
     }, [roomId]);
 
+
+    // ── 회의 시작 ────────────────────────────────────────────────────
+    const handleStartMeeting = async () => {
+        if (isStartingMeeting) return;
+        setIsStartingMeeting(true);
+        try {
+            const resp = await meetingApi.start('온라인 회의');
+            if (resp.success) {
+                setMeetingId(resp.meetingId);
+                setChatId(resp.chatId);
+                await roomApi.setActiveMeeting(roomId, resp.meetingId, resp.chatId);
+            }
+        } catch (e) {
+            console.error('[OnlineRoom] start meeting failed:', e);
+        } finally {
+            setIsStartingMeeting(false);
+        }
+    };
+
+    // ── 회의 종료 → 방 종료 + 전원 퇴장 ─────────────────────────────
+    const handleEndMeeting = async () => {
+        if (!meetingId || isEndingMeeting) return;
+        if (!window.confirm('회의를 종료하시겠습니까?')) return;
+        setIsEndingMeeting(true);
+        if (recordingTarget) {
+            sendRecordStop(recordingTarget);
+            stopRecording();
+        }
+        try {
+            await Promise.all([
+                meetingApi.end(meetingId),
+                roomApi.setActiveMeeting(roomId, null, null),
+            ]);
+            await roomApi.end(roomId);
+        } catch (e) {
+            console.error('[OnlineRoom] end meeting failed:', e);
+        }
+        // 다른 참가자들에게 종료 알림 → 자신도 퇴장
+        sendRoomEnded();
+        leaveRoom();
+        router.push('/choose');
+    };
 
     const handleLeave = useCallback(async () => {
         if (isLeavingRoom) return;
@@ -364,13 +418,19 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [recordingTarget]);
 
+    const handleRoomEnded = useCallback(() => {
+        // 호스트가 방을 종료함 → 참가자 자동 퇴장
+        router.push('/choose');
+    }, [router]);
+
     const {
         localStream, peers, isMicOn, isCameraOn, isScreenSharing, isConnected, error, myUserId,
-        toggleMic, toggleCamera, toggleScreenShare, leaveRoom,
+        toggleMic, toggleCamera, toggleScreenShare, leaveRoom, sendRoomEnded,
         sendRecordRequest, sendRecordAccept, sendRecordReject, sendRecordStop,
     } = useWebRTC({
         roomId,
         onLeave: handleLeave,
+        onRoomEnded: handleRoomEnded,
         onRecordRequest: handleRecordRequest,
         onRecordAccept: handleRecordAccept,
         onRecordReject: handleRecordReject,
@@ -523,18 +583,6 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
         handleLeave();
     };
 
-    const handleEndRoom = async () => {
-        if (isEndingRoom || !window.confirm('회의를 종료하시겠습니까?')) return;
-        setIsEndingRoom(true);
-        if (recordingTarget) {
-            sendRecordStop(recordingTarget);
-            stopRecording();
-        }
-        leaveRoom();
-        try { await roomApi.end(roomId); } catch { /* ignore */ }
-        router.push('/choose');
-    };
-
     const allParticipants = [
         { userId: myUserId, stream: localStream, isLocal: true },
         ...Array.from(peers.values()).map(p => ({ ...p, isLocal: false })),
@@ -571,6 +619,12 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
                     <span className="text-xs text-gray-500">Room #{roomId}</span>
                 </div>
                 <div className="flex items-center gap-2">
+                    {isMeetingActive && (
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600/20 border border-emerald-500/40 rounded-lg text-xs text-emerald-300 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            회의 진행 중
+                        </span>
+                    )}
                     {isScreenSharing && (
                         <span className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-600/20 border border-indigo-500/40 rounded-lg text-xs text-indigo-300 font-medium">
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
@@ -704,7 +758,7 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
                                 <ChatInterface
                                     ref={chatRef}
                                     chatId={chatId}
-                                    isMeetingActive={true}
+                                    isMeetingActive={isMeetingActive}
                                 />
                             )}
 
@@ -827,13 +881,22 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
 
                 <div className="w-px h-8 bg-white/10 mx-1" />
 
-                {/* 종료/나가기 */}
-                {isHost && (
-                    <ControlBtn onClick={handleEndRoom} danger title="회의 종료">
+                {/* 회의 시작/종료 (host only) */}
+                {isHost && !isMeetingActive && (
+                    <ControlBtn onClick={handleStartMeeting} active={true} title="회의 시작">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>{isStartingMeeting ? '시작 중...' : '회의 시작'}</span>
+                    </ControlBtn>
+                )}
+                {isHost && isMeetingActive && (
+                    <ControlBtn onClick={handleEndMeeting} danger title="회의 종료">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 18L18 6M6 6l12 12" />
                         </svg>
-                        <span>회의 종료</span>
+                        <span>{isEndingMeeting ? '종료 중...' : '회의 종료'}</span>
                     </ControlBtn>
                 )}
 

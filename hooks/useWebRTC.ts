@@ -41,13 +41,14 @@ export interface RecordRequest {
 interface UseWebRTCOptions {
     roomId: number;
     onLeave?: () => void;
+    onRoomEnded?: () => void;
     onRecordRequest?: (req: RecordRequest) => void;
     onRecordAccept?: (from: string) => void;
     onRecordReject?: (from: string) => void;
     onRecordStop?: (from: string) => void;
 }
 
-export function useWebRTC({ roomId, onLeave, onRecordRequest, onRecordAccept, onRecordReject, onRecordStop }: UseWebRTCOptions) {
+export function useWebRTC({ roomId, onLeave, onRoomEnded, onRecordRequest, onRecordAccept, onRecordReject, onRecordStop }: UseWebRTCOptions) {
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [peers, setPeers] = useState<Map<string, PeerState>>(new Map());
     const [isMicOn, setIsMicOn] = useState(true);
@@ -242,10 +243,13 @@ export function useWebRTC({ roomId, onLeave, onRecordRequest, onRecordAccept, on
         } else if (type === 'record-stop') {
             onRecordStop?.(msg.from as string);
 
+        } else if (type === 'room-ended') {
+            // 호스트가 회의를 종료함 → 모든 참가자 퇴장
+            onRoomEnded?.();
         } else if (type === 'leave') {
             removePeer(msg.id as string);
         }
-    }, [createPC, sendWs, sendOffer, drainCandidates, removePeer, onRecordRequest, onRecordAccept, onRecordReject, onRecordStop]);
+    }, [createPC, sendWs, sendOffer, drainCandidates, removePeer, onRoomEnded, onRecordRequest, onRecordAccept, onRecordReject, onRecordStop]);
 
     handleMsgRef.current = handleMessage;
 
@@ -394,6 +398,10 @@ export function useWebRTC({ roomId, onLeave, onRecordRequest, onRecordAccept, on
         onLeave?.();
     }, [sendWs, onLeave]);
 
+    const sendRoomEnded = useCallback(() => {
+        sendWs({ type: 'room-ended' });
+    }, [sendWs]);
+
     const sendRecordRequest = useCallback((targetId: string) => {
         sendWs({ type: 'record-request', to: targetId, from: myId.current });
     }, [sendWs]);
@@ -423,6 +431,7 @@ export function useWebRTC({ roomId, onLeave, onRecordRequest, onRecordAccept, on
         toggleCamera,
         toggleScreenShare,
         leaveRoom,
+        sendRoomEnded,
         sendRecordRequest,
         sendRecordAccept,
         sendRecordReject,
