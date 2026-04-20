@@ -16,6 +16,7 @@ interface Room {
     name: string;
     type: 'ONLINE' | 'OFFLINE';
     status: 'WAITING' | 'ACTIVE' | 'ENDED';
+    activeMeetingId: number | null;
     createdAt: string;
 }
 
@@ -176,8 +177,10 @@ export default function FolderPage({ folderId }: FolderPageProps) {
             router.push(`/room/${room.roomId}`);
             return;
         }
-        // 오프라인 회의가 진행 중이면 참여 차단
-        if (room.type === 'OFFLINE' && room.status === 'ACTIVE') {
+        // 오프라인 회의가 실제로 진행 중(activeMeetingId 존재)이면 참여 차단
+        // status=ACTIVE만으로는 회의가 끝났어도 호스트가 방에 남아있으면 차단되는 문제가 있어
+        // activeMeetingId를 실제 회의 진행 신호로 사용
+        if (room.type === 'OFFLINE' && room.activeMeetingId != null) {
             setShowBusyModal(true);
             return;
         }
@@ -197,7 +200,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
 
     const onlineCount = rooms.filter(r => r.type === 'ONLINE').length;
     const offlineCount = rooms.filter(r => r.type === 'OFFLINE').length;
-    const activeCount = rooms.filter(r => r.status === 'ACTIVE').length;
+    const activeCount = rooms.filter(r => r.activeMeetingId != null).length;
 
     if (accessDenied) {
         return (

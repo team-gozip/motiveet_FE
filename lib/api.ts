@@ -423,6 +423,7 @@ export const roomApi = {
                 name: string;
                 type: 'ONLINE' | 'OFFLINE';
                 status: 'WAITING' | 'ACTIVE' | 'ENDED';
+                activeMeetingId: number | null;
                 createdAt: string;
             }>;
             nextCursor: number | null;
@@ -457,6 +458,7 @@ export const roomApi = {
             transcript: string | null;
             activeMeetingId: number | null;
             activeChatId: number | null;
+            activeParticipantCount: number;
             createdAt: string;
         }>(`/rooms/${roomId}`);
     },
@@ -476,6 +478,12 @@ export const roomApi = {
 
     leave: async (roomId: number) => {
         return apiCall<{ message: string }>(`/rooms/${roomId}/leave`, {
+            method: 'POST',
+        });
+    },
+
+    heartbeat: async (roomId: number) => {
+        return apiCall<{ ok: boolean }>(`/rooms/${roomId}/heartbeat`, {
             method: 'POST',
         });
     },

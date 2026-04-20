@@ -16,6 +16,7 @@ interface OfflineCenterPanelProps {
     meetingId: number | null;
     roomName: string;
     isActive: boolean;
+    onResearch?: (topic: string) => void;
 }
 
 /**
@@ -24,7 +25,7 @@ interface OfflineCenterPanelProps {
  * - 회의 중: 현재 주제 + 제안 태그 (compact 수평 레이아웃)
  * - 10초 폴링 + 오디오 분석 완료 시 즉시 갱신
  */
-export default function OfflineCenterPanel({ meetingId, roomName, isActive }: OfflineCenterPanelProps) {
+export default function OfflineCenterPanel({ meetingId, roomName, isActive, onResearch }: OfflineCenterPanelProps) {
     const { lastAnalysisResult } = useMeeting();
 
     const [subject, setSubject] = useState<Subject | null>(null);
@@ -129,12 +130,13 @@ export default function OfflineCenterPanel({ meetingId, roomName, isActive }: Of
             {suggestions.length > 0 && (
                 <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none min-w-0">
                     {suggestions.map((sug, i) => (
-                        <span
+                        <button
                             key={`${sug}-${i}`}
-                            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold border border-[var(--border-color)] bg-[var(--highlight-bg)] text-[var(--foreground)] text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-opacity whitespace-nowrap"
+                            onClick={() => onResearch?.(sug)}
+                            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold border border-[var(--border-color)] bg-[var(--highlight-bg)] text-[var(--foreground)] text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:border-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10 transition-all whitespace-nowrap cursor-pointer"
                         >
                             {sug}
-                        </span>
+                        </button>
                     ))}
                 </div>
             )}

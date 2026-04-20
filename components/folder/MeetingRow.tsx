@@ -5,6 +5,7 @@ interface Room {
     name: string;
     type: 'ONLINE' | 'OFFLINE';
     status: 'WAITING' | 'ACTIVE' | 'ENDED';
+    activeMeetingId: number | null;
     createdAt: string;
 }
 
@@ -23,14 +24,20 @@ const toKST = (ts: string) => {
     }).replace(/\. /g, '.').replace(/\.$/, '');
 };
 
-const statusLabel: Record<Room['status'], { text: string; color: string; bg: string }> = {
-    WAITING: { text: '대기 중', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/20' },
-    ACTIVE:  { text: '진행 중', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
-    ENDED:   { text: '종료됨',  color: 'text-[var(--text-tertiary)]', bg: 'bg-[var(--highlight-bg)]' },
+// 배지는 "실제 회의 진행 여부"(activeMeetingId)와 "방 라이프사이클"(status)을 분리해서 판정.
+// status=ACTIVE여도 activeMeetingId가 null이면 회의는 끝난 것 → "대기 중"으로 표시.
+const deriveBadge = (room: Room) => {
+    if (room.status === 'ENDED') {
+        return { text: '종료됨', color: 'text-[var(--text-tertiary)]', bg: 'bg-[var(--highlight-bg)]' };
+    }
+    if (room.activeMeetingId != null) {
+        return { text: '진행 중', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' };
+    }
+    return { text: '대기 중', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/20' };
 };
 
 export default function MeetingRow({ room, onClick }: MeetingRowProps) {
-    const { text: statusText, color: statusColor, bg: statusBg } = statusLabel[room.status];
+    const { text: statusText, color: statusColor, bg: statusBg } = deriveBadge(room);
 
     return (
         <div

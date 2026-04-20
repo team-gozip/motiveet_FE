@@ -3,7 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOfflineRoom } from '@/hooks/useOfflineRoom';
-import { roomApi, meetingApi } from '@/lib/api';
+import { useRoomHeartbeat } from '@/hooks/useRoomHeartbeat';
+import { roomApi, meetingApi, getAccessToken } from '@/lib/api';
 import { useMeeting } from '@/components/providers/MeetingProvider';
 import ChatInterface from '@/components/main/ChatInterface';
 import MeetingSummary from '@/components/main/MeetingSummary';
@@ -37,6 +38,9 @@ export default function OfflineRoomPage({
     const router = useRouter();
     const [isLeavingRoom, setIsLeavingRoom] = useState(false);
 
+    // ── 하트비트 (좀비 룸 방지) ──────────────────────────────────────
+    useRoomHeartbeat(roomId);
+
     // ── 항상 사용 가능한 AI 채팅용 전용 chatId ────────────────────
     const [dedicatedChatId, setDedicatedChatId] = useState<number | null>(null);
 
@@ -56,11 +60,19 @@ export default function OfflineRoomPage({
     const [nonHostActiveMeetingId, setNonHostActiveMeetingId] = useState<number | null>(initialMeetingId);
     const [nonHostSummary, setNonHostSummary] = useState<string | null>(initialSummary);
     const [isFetchingNonHostSummary, setIsFetchingNonHostSummary] = useState(false);
+    const [summaryFailed, setSummaryFailed] = useState(false);
+    // fresh participant count가 0이면 방이 사실상 버려진 상태 → 모든 기능 정지
+    const [isRoomAbandoned, setIsRoomAbandoned] = useState(false);
+    const hadActiveMeetingRef = useRef<boolean>(!!initialMeetingId);
+    const pollCountRef = useRef(0);
+    // 이 세션에서 회의를 실제로 시작한 적이 있는지. 시작한 적 없으면 나갈 때 roomApi.end 호출하지 않음
+    // → 방을 재사용 가능 상태(WAITING)로 유지. initialMeetingId/initialSummary가 있으면 이미 회의가 돌았던 방이므로 true.
+    const hasStartedMeetingRef = useRef<boolean>(!!initialMeetingId || !!initialSummary);
 
     // ── 타이머 ───────────────────────────────────────────────────
     const [elapsedSecs, setElapsedSecs] = useState(0);
     const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
-    const chatRef = useRef<null>(null);
+    const chatRef = useRef<{ handleResearch: (topic: string) => Promise<void> } | null>(null);
 
     const { startGlobalMeeting, endGlobalMeeting, volume, isRecording, activeMeetingId } = useMeeting();
     const isThisRecording = isRecording && activeMeetingId === meetingId;
@@ -84,8 +96,15 @@ export default function OfflineRoomPage({
     const myUserIdNum = Number(myUserId);
     const isHost = myUserIdNum === hostId;
 
-    const handleLeaveClick = () => {
+    const handleLeaveClick = async () => {
+        if (isLeavingRoom) return;
         leaveRoom();
+        // 회의를 실제로 시작한 적 있는 호스트가 나갈 때만 방 종료.
+        // 시작 안 한 방은 WAITING으로 남겨 재사용 가능하게.
+        // (좀비 방이 되어도 BE stale sweep이 120초 후 정리)
+        if (isHost && hasStartedMeetingRef.current) {
+            try { await roomApi.end(roomId); } catch { /* ignore */ }
+        }
         handleLeave();
     };
 
@@ -118,25 +137,104 @@ export default function OfflineRoomPage({
         }
     }, [hostSummary, isSummaryLoading, isActive]);
 
-    // ── 비생성자: 5초 폴링으로 회의 종료 + 요약 감지 ─────────────
+    // ── 탭 닫힘/새로고침 시 룸 정리 (좀비 룸 방지) ────────────────
+    // SPA router.push로 이탈 시엔 pagehide가 안 뜨므로 정상 handleLeave 경로로 처리됨.
+    // 실제 탭 닫기/크래시/네트워크 끊김엔 keepalive fetch가 BE에 leave + end 신호 전달.
     useEffect(() => {
-        if (isHost || nonHostSummary) return;
+        const onUnload = () => {
+            const token = getAccessToken();
+            if (!token) return;
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            };
+            fetch(`/api/rooms/${roomId}/leave`, {
+                method: 'POST', headers, keepalive: true,
+            }).catch(() => {});
+            // 회의 시작 전 이탈은 방을 재사용 가능한 WAITING으로 유지.
+            // 시작 이후에만 end 비컨 전송.
+            if (isHost && hasStartedMeetingRef.current) {
+                fetch(`/api/rooms/${roomId}/end`, {
+                    method: 'POST', headers, keepalive: true,
+                }).catch(() => {});
+            }
+        };
+        window.addEventListener('pagehide', onUnload);
+        return () => window.removeEventListener('pagehide', onUnload);
+    }, [roomId, isHost]);
+
+    // ── 비생성자: 5초 폴링으로 회의 종료 + 요약 감지 ─────────────
+    // 실패 탈출구:
+    //   1) room.status === 'ENDED' && !summary → 요약 생성 실패로 판정
+    //   2) 회의가 돌았던 적 있고 종료 후 90초 경과해도 요약 없으면 실패 판정
+    // (BE stale sweep이 120초 후 ENDED 전이시키므로 1번 조건이 대부분 먼저 걸림)
+    useEffect(() => {
+        if (isHost || nonHostSummary || summaryFailed) return;
 
         const poll = setInterval(async () => {
             try {
                 const room = await roomApi.getById(roomId);
                 setNonHostActiveMeetingId(room.activeMeetingId ?? null);
+                setIsRoomAbandoned(room.activeParticipantCount === 0);
+
                 if (room.summary) {
                     setNonHostSummary(room.summary);
                     setIsFetchingNonHostSummary(false);
-                } else if (!room.activeMeetingId) {
-                    setIsFetchingNonHostSummary(true);
+                    return;
                 }
+
+                if (room.activeMeetingId) {
+                    // 회의 진행 중
+                    hadActiveMeetingRef.current = true;
+                    pollCountRef.current = 0;
+                    setIsFetchingNonHostSummary(false);
+                    return;
+                }
+
+                // activeMeetingId=null — 회의가 없거나 종료된 상태
+                pollCountRef.current += 1;
+
+                // 실패 조건: 방이 ENDED거나, 이전에 회의가 있었고 90초(18 × 5초) 경과
+                if (room.status === 'ENDED' ||
+                    (hadActiveMeetingRef.current && pollCountRef.current > 18)) {
+                    setIsFetchingNonHostSummary(false);
+                    setSummaryFailed(true);
+                    return;
+                }
+
+                // 과거에 회의가 돌았으면 요약 대기 중, 아니면 회의 시작 대기
+                setIsFetchingNonHostSummary(hadActiveMeetingRef.current);
             } catch { /* ignore */ }
         }, 5000);
 
         return () => clearInterval(poll);
-    }, [isHost, nonHostSummary, roomId]);
+    }, [isHost, nonHostSummary, summaryFailed, roomId]);
+
+    // ── Host: 5초 폴링으로 activeParticipantCount 추적 ──────────
+    // count === 0이면 방 버려진 상태 → 녹음/마이크 자동 정지
+    useEffect(() => {
+        if (!isHost) return;
+        const poll = setInterval(async () => {
+            try {
+                const room = await roomApi.getById(roomId);
+                setIsRoomAbandoned(room.activeParticipantCount === 0);
+            } catch { /* ignore */ }
+        }, 5000);
+        return () => clearInterval(poll);
+    }, [isHost, roomId]);
+
+    // ── 방 버려짐 감지 시 기능 정지 (녹음 stop, 마이크 off) ────
+    useEffect(() => {
+        if (!isRoomAbandoned) return;
+        if (isThisRecording) {
+            endGlobalMeeting();
+        }
+        if (isMicOn) {
+            toggleMic();
+        }
+    // toggleMic/endGlobalMeeting은 ref-stable이라 deps에서 제외
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isRoomAbandoned, isThisRecording, isMicOn]);
 
     // ── Host: 회의 시작 ───────────────────────────────────────────
     const handleStartMeeting = async () => {
@@ -145,6 +243,7 @@ export default function OfflineRoomPage({
         try {
             const resp = await meetingApi.start(roomName || '오프라인 회의');
             if (resp.success) {
+                hasStartedMeetingRef.current = true;
                 setMeetingId(resp.meetingId);
                 setChatId(resp.chatId);
                 setHostSummary(null);
@@ -162,32 +261,50 @@ export default function OfflineRoomPage({
 
     // ── Host: 회의 종료 ───────────────────────────────────────────
     const handleEndMeeting = async () => {
-        if (!meetingId || !window.confirm('회의를 종료하시겠습니까?')) return;
+        if (!meetingId || isEndingMeeting) return;
+        if (!window.confirm('회의를 종료하시겠습니까?')) return;
+
+        const currentMeetingId = meetingId;
         setIsEndingMeeting(true);
         setIsSummaryLoading(true);
-        try {
-            const [resp] = await Promise.all([
-                meetingApi.end(meetingId),
-                roomApi.setActiveMeeting(roomId, null, null),
-            ]);
-            if (resp.success) {
-                endGlobalMeeting();
-                const summary = resp.summary || null;
-                setHostSummary(summary);
-                setMeetingId(null);
-                setChatId(null); // effectiveChatId가 dedicatedChatId로 폴백
-                // 요약을 방에 저장 → 비생성자도 폴링으로 확인 가능
-                if (summary) {
-                    await roomApi.setActiveMeeting(roomId, null, null, summary);
-                }
-            }
-        } catch (e) {
-            console.error('[OfflineRoom] end meeting failed:', e);
+
+        // allSettled로 둘 다 독립 실행 — 하나 실패해도 다른 하나는 완료시킴
+        const [endResult, clearResult] = await Promise.allSettled([
+            meetingApi.end(currentMeetingId),
+            roomApi.setActiveMeeting(roomId, null, null),
+        ]);
+
+        // FE 상태는 항상 정리 — BE 일부 실패해도 회의는 사실상 종료된 것으로 처리
+        // (pagehide 비컨 + BE stale sweep이 좀비 상태를 복구)
+        endGlobalMeeting();
+        setMeetingId(null);
+        setChatId(null); // effectiveChatId는 dedicatedChatId로 폴백
+
+        let summary: string | null = null;
+        if (endResult.status === 'fulfilled' && endResult.value.success) {
+            summary = endResult.value.summary || null;
+            setHostSummary(summary);
+        } else {
+            console.error('[OfflineRoom] meetingApi.end failed:',
+                endResult.status === 'rejected' ? endResult.reason : endResult.value);
             setHostSummary(null);
-        } finally {
-            setIsEndingMeeting(false);
-            setIsSummaryLoading(false);
         }
+
+        if (clearResult.status === 'rejected') {
+            console.error('[OfflineRoom] setActiveMeeting(null) failed:', clearResult.reason);
+        }
+
+        // 요약을 방에 저장 → 비생성자 폴링이 확인 가능
+        if (summary) {
+            try {
+                await roomApi.setActiveMeeting(roomId, null, null, summary);
+            } catch (e) {
+                console.error('[OfflineRoom] save summary to room failed:', e);
+            }
+        }
+
+        setIsEndingMeeting(false);
+        setIsSummaryLoading(false);
     };
 
     const barMultipliers = [0.4, 0.6, 0.9, 1.2, 1.5, 1.2, 0.9, 0.6, 0.4];
@@ -222,6 +339,17 @@ export default function OfflineRoomPage({
         return (
             <div className="h-screen flex flex-col bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
                 <Header isMeetingActive={isMeetingActive} role="참가자" />
+
+                {isRoomAbandoned && (
+                    <div className="flex-shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-900/40 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                            회의 참가자가 없습니다.
+                        </span>
+                    </div>
+                )}
 
                 <div className="flex-1 overflow-hidden">
                     {isMeetingActive ? (
@@ -265,6 +393,30 @@ export default function OfflineRoomPage({
                     ) : nonHostSummary ? (
                         /* 요약 표시 */
                         <MeetingSummary summary={nonHostSummary} isLoading={false} />
+                    ) : summaryFailed ? (
+                        /* 요약 생성 실패 or 방 종료됨 — 탈출구 제공 */
+                        <div className="h-full flex items-center justify-center p-8">
+                            <div className="text-center space-y-4 max-w-sm">
+                                <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center bg-amber-100 dark:bg-amber-900/30">
+                                    <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold text-[var(--foreground)]">요약을 불러올 수 없습니다</p>
+                                    <p className="text-xs text-[var(--foreground)] text-[var(--text-secondary)] mt-1 leading-relaxed">
+                                        회의가 종료되었으나 AI 요약이 생성되지 않았습니다.<br />
+                                        생성자에게 다시 시도해달라고 요청하세요.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleLeaveClick}
+                                    className="mt-2 px-4 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity"
+                                >
+                                    나가기
+                                </button>
+                            </div>
+                        </div>
                     ) : (
                         /* 회의 없음 */
                         <div className="h-full flex items-center justify-center p-8">
@@ -306,6 +458,18 @@ export default function OfflineRoomPage({
 
             <Header isMeetingActive={isActive} role="생성자" />
 
+            {/* 방 버려짐 배너 — fresh 참가자 0명. 모든 기능 정지됨. */}
+            {isRoomAbandoned && (
+                <div className="flex-shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-900/40 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                        회의 참가자가 없습니다 — 모든 기능이 정지되었습니다.
+                    </span>
+                </div>
+            )}
+
             {/* ── Body ─────────────────────────────────────────── */}
             <div className="flex-1 flex overflow-hidden">
 
@@ -342,6 +506,7 @@ export default function OfflineRoomPage({
                                     meetingId={meetingId}
                                     roomName={roomName}
                                     isActive={isActive}
+                                    onResearch={(topic) => chatRef.current?.handleResearch(topic)}
                                 />
                             </div>
 
@@ -411,8 +576,9 @@ export default function OfflineRoomPage({
                 {/* 마이크 버튼 */}
                 <button
                     onClick={toggleMic}
-                    title={isMicOn ? '마이크 끄기' : '마이크 켜기'}
-                    className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                    disabled={isRoomAbandoned}
+                    title={isRoomAbandoned ? '참가자 없음 — 비활성' : (isMicOn ? '마이크 끄기' : '마이크 켜기')}
+                    className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                         isMicOn ? 'bg-red-50 dark:bg-red-950/20' : 'bg-[var(--highlight-bg)]'
                     }`}
                 >
@@ -460,8 +626,8 @@ export default function OfflineRoomPage({
                 {!isActive ? (
                     <button
                         onClick={handleStartMeeting}
-                        disabled={isStartingMeeting}
-                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:text-[var(--text-secondary)] shadow-sm shadow-indigo-500/20"
+                        disabled={isStartingMeeting || isRoomAbandoned}
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:text-[var(--text-secondary)] disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shadow-indigo-500/20"
                     >
                         {isStartingMeeting ? '시작 중...' : '회의 시작'}
                     </button>

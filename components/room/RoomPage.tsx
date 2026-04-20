@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWebRTC, RecordRequest } from '@/hooks/useWebRTC';
+import { useRoomHeartbeat } from '@/hooks/useRoomHeartbeat';
 import { roomApi, meetingApi, getAccessToken } from '@/lib/api';
 import OfflineRoomPage from './OfflineRoomPage';
 import ChatInterface from '@/components/main/ChatInterface';
@@ -37,6 +38,22 @@ function VideoTile({
     const [isSpeaking, setIsSpeaking] = useState(false);
     // 비디오가 실제로 재생 중인지 추적
     const [isPlaying, setIsPlaying] = useState(false);
+    const [hasVideo, setHasVideo] = useState(false);
+
+    useEffect(() => {
+        const track = stream?.getVideoTracks()[0];
+        if (!track) { setHasVideo(false); return; }
+        const update = () => setHasVideo(track.enabled && !track.muted && track.readyState === 'live');
+        update();
+        track.addEventListener('mute', update);
+        track.addEventListener('unmute', update);
+        track.addEventListener('ended', update);
+        return () => {
+            track.removeEventListener('mute', update);
+            track.removeEventListener('unmute', update);
+            track.removeEventListener('ended', update);
+        };
+    }, [stream]);
 
     // stream이 바뀔 때마다 비디오에 연결 + play
     const attachStream = useCallback((node: HTMLVideoElement | null) => {
@@ -153,11 +170,14 @@ function VideoTile({
         };
     }, [stream, isMuted, isLocal]);
 
-    const initials = label.slice(0, 2).toUpperCase();
+    const displayName = (label.split('@')[0] || label).slice(0, 10);
+    const cameraOff = !stream || !hasVideo;
 
     return (
         <div
-            className={`relative rounded-2xl overflow-hidden bg-gray-900 aspect-video flex items-center justify-center transition-all duration-300 ${
+            className={`relative rounded-2xl overflow-hidden aspect-video flex items-center justify-center transition-all duration-300 ${
+                cameraOff ? 'bg-black' : 'bg-gray-900'
+            } ${
                 !isLocal ? 'cursor-pointer' : ''
             } ${
                 isSpeaking 
@@ -168,19 +188,19 @@ function VideoTile({
             }`}
             onClick={!isLocal ? onClick : undefined}
         >
-            {stream ? (
+            {stream && (
                 <video
                     ref={attachStream}
                     autoPlay
                     playsInline
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full object-cover ${cameraOff ? 'invisible' : ''}`}
                 />
-            ) : (
-                <div className="flex flex-col items-center justify-center gap-2">
-                    <div className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center">
-                        <span className="text-xl font-bold text-gray-300">{initials}</span>
+            )}
+            {cameraOff && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black">
+                    <div className="w-20 h-20 rounded-full bg-gray-800 border-2 border-white/20 flex items-center justify-center px-2">
+                        <span className="text-white font-semibold text-sm truncate">{displayName}</span>
                     </div>
-                    <span className="text-xs text-gray-500">카메라 꺼짐</span>
                 </div>
             )}
             <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
@@ -326,6 +346,9 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunkIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // ── 하트비트 (좀비 룸 방지) ──────────────────────────────────────
+    useRoomHeartbeat(roomId);
 
     // ── 초기 로드 ───────────────────────────────────────────────────
     useEffect(() => {
