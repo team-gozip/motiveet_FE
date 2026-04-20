@@ -329,6 +329,7 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
     // ── 사이드 패널 ──────────────────────────────────────────────────
     const [sidePanel, setSidePanel] = useState<'transcript' | 'chat' | 'memo' | null>(null);
     const [chatId, setChatId] = useState<number | null>(null);
+    const [sessionId, setSessionId] = useState<number | null>(null);
     const chatRef = useRef<any>(null);
 
     const togglePanel = (panel: 'transcript' | 'chat' | 'memo') => {
@@ -358,11 +359,12 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
             if (info.activeMeetingId) {
                 setMeetingId(info.activeMeetingId);
                 if (info.activeChatId) setChatId(info.activeChatId);
+                if (info.activeSessionId) setSessionId(info.activeSessionId);
+            } else {
+                // 회의 전: Room의 fallback chat/session으로 세팅 (회의 시작 후에도 같은 chat/session 재사용됨)
+                if (info.fallbackChatId) setChatId(prev => prev ?? info.fallbackChatId);
+                if (info.fallbackSessionId) setSessionId(prev => prev ?? info.fallbackSessionId);
             }
-        }).catch(() => {});
-        // AI 채팅용 전용 chatId (회의가 없을 때 fallback)
-        meetingApi.getMe().then(m => {
-            setChatId(prev => prev ?? m.chatId);
         }).catch(() => {});
     }, [roomId]);
 
@@ -372,11 +374,13 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
         if (isStartingMeeting) return;
         setIsStartingMeeting(true);
         try {
-            const resp = await meetingApi.start('온라인 회의');
+            // roomId 전달 → BE가 room.fallbackChatId/SessionId를 그대로 재사용 (회의 전 대화/메모 연속)
+            const resp = await meetingApi.start('온라인 회의', roomId);
             if (resp.success) {
                 setMeetingId(resp.meetingId);
                 setChatId(resp.chatId);
-                await roomApi.setActiveMeeting(roomId, resp.meetingId, resp.chatId);
+                setSessionId(resp.sessionId);
+                await roomApi.setActiveMeeting(roomId, resp.meetingId, resp.chatId, null, resp.sessionId);
             }
         } catch (e) {
             console.error('[OnlineRoom] start meeting failed:', e);
@@ -781,6 +785,7 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
                                 <ChatInterface
                                     ref={chatRef}
                                     chatId={chatId}
+                                    sessionId={sessionId}
                                     isMeetingActive={isMeetingActive}
                                 />
                             )}

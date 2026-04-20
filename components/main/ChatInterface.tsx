@@ -47,7 +47,7 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
 
     useImperativeHandle(ref, () => ({
         handleResearch: async (topic: string) => {
-            if (!chatId || isLoading) return;
+            if (!chatId || isLoading || !isMeetingActive) return;
             setIsLoading(true);
             try {
                 const userResponse = await chatApi.requestResearch(chatId, topic, sessionId ?? null);
@@ -97,7 +97,7 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
     };
 
     const handleSend = async () => {
-        if (!input.trim() || !chatId || isLoading) return;
+        if (!input.trim() || !chatId || isLoading || !isMeetingActive) return;
 
         const userMessage = input.trim();
         setInput('');
@@ -162,7 +162,9 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                 </svg>
                             </div>
-                            <p className="text-xs text-[var(--text-tertiary)]">AI에게 무엇이든 물어보세요</p>
+                            <p className="text-xs text-[var(--text-tertiary)]">
+                                {isMeetingActive ? 'AI에게 무엇이든 물어보세요' : '회의가 시작되면 AI 채팅을 사용할 수 있습니다'}
+                            </p>
                         </div>
                     </div>
                 )}
@@ -234,15 +236,15 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        placeholder="메시지를 입력하세요..."
-                        className="flex-1 px-3.5 py-2.5 bg-[var(--highlight-bg)] text-[var(--foreground)] border border-[var(--border-color)] rounded-xl resize-none focus:ring-2 focus:ring-[var(--accent-primary)]/20 focus:border-[var(--accent-primary)]/40 outline-none transition-all placeholder:text-[var(--text-tertiary)] text-sm"
+                        placeholder={isMeetingActive ? '메시지를 입력하세요...' : '회의 시작 후 사용할 수 있습니다'}
+                        className="flex-1 px-3.5 py-2.5 bg-[var(--highlight-bg)] text-[var(--foreground)] border border-[var(--border-color)] rounded-xl resize-none focus:ring-2 focus:ring-[var(--accent-primary)]/20 focus:border-[var(--accent-primary)]/40 outline-none transition-all placeholder:text-[var(--text-tertiary)] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         rows={1}
-                        disabled={isLoading}
+                        disabled={isLoading || !isMeetingActive}
                     />
                     <button
                         onClick={handleSend}
-                        disabled={!input.trim() || isLoading}
-                        className="p-2.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-30 text-white rounded-xl transition-all active:scale-95"
+                        disabled={!input.trim() || isLoading || !isMeetingActive}
+                        className="p-2.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl transition-all active:scale-95"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

@@ -145,6 +145,7 @@ export const meetingApi = {
             startedAt: string;
             endedAt: string | null;
             summary: string | null;
+            memo: string | null;
         }>('/meetings/current');
     },
 
@@ -157,6 +158,7 @@ export const meetingApi = {
             startedAt: string;
             endedAt: string | null;
             summary: string | null;
+            memo: string | null;
         }>('/meetings/me');
     },
 
@@ -169,6 +171,7 @@ export const meetingApi = {
             startedAt: string;
             endedAt: string | null;
             summary: string | null;
+            memo: string | null;
         }>(`/meetings/${meetingId}`);
     },
 
@@ -187,17 +190,18 @@ export const meetingApi = {
         }>(`/meetings?${params}`);
     },
 
-    start: async (title?: string) => {
+    start: async (title?: string, roomId?: number) => {
         return apiCall<{
             success: boolean;
             meetingId: number;
             chatId: number;
             sessionId: number | null;
             title: string;
+            memo: string | null;
             startedAt: string;
         }>('/meetings/start', {
             method: 'POST',
-            body: JSON.stringify({ title }),
+            body: JSON.stringify({ title, roomId: roomId ?? null }),
         });
     },
 
@@ -205,6 +209,16 @@ export const meetingApi = {
         return apiCall<{ success: boolean; endedAt: string; summary?: string }>(`/meetings/${meetingId}/end`, {
             method: 'POST',
             body: JSON.stringify({ memo: memo || null }),
+        });
+    },
+
+    updateMemo: async (meetingId: number, memo: string | null) => {
+        return apiCall<{
+            meetingId: number;
+            memo: string | null;
+        }>(`/meetings/${meetingId}/memo`, {
+            method: 'PUT',
+            body: JSON.stringify({ memo }),
         });
     },
 
@@ -469,6 +483,7 @@ export const roomApi = {
             activeChatId: number | null;
             activeSessionId: number | null;
             fallbackSessionId: number | null;
+            fallbackChatId: number | null;
             activeParticipantCount: number;
             createdAt: string;
         }>(`/rooms/${roomId}`);

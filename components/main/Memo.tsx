@@ -1,69 +1,55 @@
 'use client';
 
-import { useState, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { getAccessToken } from '@/lib/api';
-
-// JWT payload에서 username(sub)을 추출하는 헬퍼
-const getUsernameFromToken = (): string | null => {
-    const token = getAccessToken();
-    if (!token) return null;
-    try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload.sub || null;
-    } catch {
-        return null;
-    }
-};
-
-const getMemoKey = (meetingId: number): string => {
-    const username = getUsernameFromToken();
-    return `memo_${username || 'unknown'}_${meetingId}`;
-};
+import { meetingApi } from '@/lib/api';
 
 interface MemoProps {
     meetingId: number | null;
+    initialContent?: string | null;
+    readOnly?: boolean;
     onContentChange?: (content: string) => void;
 }
 
-export default function Memo({ meetingId, onContentChange }: MemoProps) {
+export default function Memo({ meetingId, initialContent, readOnly, onContentChange }: MemoProps) {
     const [content, setContent] = useState('');
     const [isEditing, setIsEditing] = useState(false);
+    const [isSaved, setIsSaved] = useState(false);
+    const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    // meetingId가 바뀔 때 이전 회의 잔여 타이머가 새 회의의 memo를 덮어쓰는 것을 방지
+    const activeMeetingId = useRef<number | null>(null);
 
-    // meetingId가 바뀔 때마다 해당 회의의 메모를 불러옴
-    // useLayoutEffect: localStorage 읽기는 페인트 전에 처리해야 깜빡임 없음
-    /* eslint-disable react-hooks/set-state-in-effect */
-    useLayoutEffect(() => {
-        if (!meetingId) {
-            setContent('');
-            if (onContentChange) onContentChange('');
-            return;
-        }
-        const savedMemo = localStorage.getItem(getMemoKey(meetingId));
-        const initialContent = savedMemo || '';
-        setContent(initialContent);
-        if (onContentChange) {
-            onContentChange(initialContent);
-        }
-    }, [meetingId, onContentChange]);
-    /* eslint-enable react-hooks/set-state-in-effect */
+    useEffect(() => {
+        activeMeetingId.current = meetingId;
+        const next = initialContent ?? '';
+        setContent(next);
+        if (onContentChange) onContentChange(next);
+        setIsSaved(false);
+    }, [meetingId, initialContent, onContentChange]);
 
-    // 회의별로 독립된 키에 저장
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newContent = e.target.value;
         setContent(newContent);
+        if (onContentChange) onContentChange(newContent);
 
-        if (onContentChange) {
-            onContentChange(newContent);
-        }
-
-        if (meetingId) {
-            localStorage.setItem(getMemoKey(meetingId), newContent);
-        }
+        if (!meetingId) return;
+        const targetMeetingId = meetingId;
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        setIsSaved(false);
+        saveTimer.current = setTimeout(async () => {
+            try {
+                await meetingApi.updateMemo(targetMeetingId, newContent);
+                if (activeMeetingId.current === targetMeetingId) {
+                    setIsSaved(true);
+                }
+            } catch (err) {
+                console.error('[Memo] save failed:', err);
+            }
+        }, 600);
     };
 
-    const enableEditMode = () => setIsEditing(true);
+    const enableEditMode = () => { if (!readOnly) setIsEditing(true); };
     const disableEditMode = () => setIsEditing(false);
 
     return (
@@ -76,13 +62,20 @@ export default function Memo({ meetingId, onContentChange }: MemoProps) {
                     </div>
                     <div>
                         <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--accent-primary)]">Meeting Memo</h2>
-                        <span className="text-[10px] font-bold text-[var(--accent-primary)] opacity-40">{isEditing ? 'EDITING' : 'PREVIEW'}</span>
+                        <span className="text-[10px] font-bold text-[var(--accent-primary)] opacity-40">
+                            {readOnly ? 'READ ONLY' : isEditing ? 'EDITING' : 'PREVIEW'}
+                        </span>
                     </div>
                 </div>
-                <div className="flex space-x-1">
-                    <div className="w-1 h-1 rounded-full bg-[var(--accent-primary)] opacity-20"></div>
-                    <div className="w-1 h-1 rounded-full bg-[var(--accent-primary)] opacity-20"></div>
-                    <div className="w-1 h-1 rounded-full bg-[var(--accent-primary)] opacity-20"></div>
+                <div className="flex items-center gap-2">
+                    {isSaved && !readOnly && (
+                        <span className="text-[10px] text-emerald-500 font-semibold">저장됨</span>
+                    )}
+                    <div className="flex space-x-1">
+                        <div className="w-1 h-1 rounded-full bg-[var(--accent-primary)] opacity-20"></div>
+                        <div className="w-1 h-1 rounded-full bg-[var(--accent-primary)] opacity-20"></div>
+                        <div className="w-1 h-1 rounded-full bg-[var(--accent-primary)] opacity-20"></div>
+                    </div>
                 </div>
             </div>
 
@@ -91,7 +84,7 @@ export default function Memo({ meetingId, onContentChange }: MemoProps) {
                 {!isEditing ? (
                     <div className="p-8 prose prose-slate dark:prose-invert max-w-none text-[var(--foreground)] markdown-preview">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {content || '*메모가 비어 있습니다. 클릭하여 작성을 시작하세요.*'}
+                            {content || (readOnly ? '*메모 없음*' : '*메모가 비어 있습니다. 클릭하여 작성을 시작하세요.*')}
                         </ReactMarkdown>
                     </div>
                 ) : (

@@ -473,7 +473,7 @@ export default function OfflineRoomPage({
             {/* ── Body ─────────────────────────────────────────── */}
             <div className="flex-1 flex overflow-hidden">
 
-                {/* 왼쪽: AI 채팅 (항상 표시, 항상 사용 가능) */}
+                {/* 왼쪽: AI 채팅 (항상 표시, 회의 진행 중에만 사용 가능) */}
                 <div className="flex-shrink-0 w-72 flex flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--card-bg)]">
                     <div className="flex-shrink-0 px-4 py-2.5 border-b border-[var(--border-color)]">
                         <span className="text-[10px] font-bold text-[var(--foreground)] text-[var(--text-secondary)] uppercase tracking-wider">
