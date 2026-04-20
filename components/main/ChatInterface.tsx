@@ -104,7 +104,7 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
         setIsLoading(true);
 
         try {
-            const userResponse = await chatApi.sendMessage(chatId, userMessage);
+            const userResponse = await chatApi.sendMessage(chatId, userMessage, undefined, sessionId ?? null);
             const newUserMessage: ChatMessage = {
                 messageId: userResponse.messageId,
                 role: 'user',

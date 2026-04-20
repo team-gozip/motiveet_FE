@@ -317,6 +317,7 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                             <ChatInterface
                                 ref={chatRef}
                                 chatId={chatId}
+                                sessionId={currentMeeting?.sessionId ?? null}
                                 isMeetingActive={isActive}
                             />
                         ) : (
