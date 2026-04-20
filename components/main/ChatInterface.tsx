@@ -21,11 +21,12 @@ interface ChatMessage {
 
 interface ChatInterfaceProps {
     chatId: number | null;
+    sessionId?: number | null;
     isMeetingActive: boolean;
 }
 
 const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProps, ref) {
-    const { chatId, isMeetingActive } = props;
+    const { chatId, sessionId, isMeetingActive } = props;
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -35,8 +36,10 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
     useEffect(() => {
         if (chatId) {
             loadChatHistory();
+        } else {
+            setMessages([]);
         }
-    }, [chatId]);
+    }, [chatId, sessionId]);
 
     useEffect(() => {
         scrollToBottom();
@@ -47,7 +50,7 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
             if (!chatId || isLoading) return;
             setIsLoading(true);
             try {
-                const userResponse = await chatApi.requestResearch(chatId, topic);
+                const userResponse = await chatApi.requestResearch(chatId, topic, sessionId ?? null);
                 const newUserMessage: ChatMessage = {
                     messageId: userResponse.messageId,
                     role: 'user',
@@ -81,7 +84,7 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
         if (!chatId) return;
 
         try {
-            const response = await chatApi.getHistory(chatId);
+            const response = await chatApi.getHistory(chatId, undefined, 50, sessionId ?? null);
             if (response && Array.isArray(response.messages)) {
                 setMessages(response.messages);
             } else {

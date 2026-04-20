@@ -140,6 +140,7 @@ export const meetingApi = {
         return apiCall<{
             meetingId: number;
             chatId: number;
+            sessionId: number | null;
             title: string;
             startedAt: string;
             endedAt: string | null;
@@ -151,6 +152,7 @@ export const meetingApi = {
         return apiCall<{
             meetingId: number;
             chatId: number;
+            sessionId: number | null;
             title: string;
             startedAt: string;
             endedAt: string | null;
@@ -162,6 +164,7 @@ export const meetingApi = {
         return apiCall<{
             meetingId: number;
             chatId: number;
+            sessionId: number | null;
             title: string;
             startedAt: string;
             endedAt: string | null;
@@ -189,6 +192,7 @@ export const meetingApi = {
             success: boolean;
             meetingId: number;
             chatId: number;
+            sessionId: number | null;
             title: string;
             startedAt: string;
         }>('/meetings/start', {
@@ -314,17 +318,18 @@ export const subjectApi = {
 // ── Chat API ────────────────────────────────────────────────────
 
 export const chatApi = {
-    sendMessage: async (chatId: number, text?: string, image?: string) => {
+    sendMessage: async (chatId: number, text?: string, image?: string, sessionId?: number | null) => {
         return apiCall<{
             messageId: number;
             chatId: number;
+            sessionId: number | null;
             role: 'user' | 'assistant';
             text?: string;
             image?: string;
             timestamp: string;
         }>('/chats/messages', {
             method: 'POST',
-            body: JSON.stringify({ chatId, role: 'user', text, image }),
+            body: JSON.stringify({ chatId, sessionId: sessionId ?? null, role: 'user', text, image }),
         });
     },
 
@@ -332,6 +337,7 @@ export const chatApi = {
         return apiCall<{
             messageId: number;
             chatId: number;
+            sessionId: number | null;
             role: 'assistant';
             text: string;
             image?: string;
@@ -341,14 +347,16 @@ export const chatApi = {
         });
     },
 
-    getHistory: async (chatId: number, cursor?: number, limit: number = 50) => {
+    getHistory: async (chatId: number, cursor?: number, limit: number = 50, sessionId?: number | null) => {
         const params = new URLSearchParams();
         if (cursor) params.append('cursor', String(cursor));
         params.append('limit', String(limit));
+        if (sessionId != null) params.append('sessionId', String(sessionId));
         return apiCall<{
             messages: Array<{
                 messageId: number;
                 chatId: number;
+                sessionId: number | null;
                 role: 'user' | 'assistant';
                 text?: string;
                 image?: string;
@@ -357,17 +365,18 @@ export const chatApi = {
         }>(`/chats/${chatId}/messages?${params}`);
     },
 
-    requestResearch: async (chatId: number, topic: string) => {
+    requestResearch: async (chatId: number, topic: string, sessionId?: number | null) => {
         return apiCall<{
             messageId: number;
             chatId: number;
+            sessionId: number | null;
             role: 'user' | 'assistant';
             text?: string;
             image?: string;
             timestamp: string;
         }>('/chats/messages', {
             method: 'POST',
-            body: JSON.stringify({ chatId, role: 'user', text: `${topic} 찾아줘` }),
+            body: JSON.stringify({ chatId, sessionId: sessionId ?? null, role: 'user', text: `${topic} 찾아줘` }),
         });
     },
 };
@@ -458,15 +467,23 @@ export const roomApi = {
             transcript: string | null;
             activeMeetingId: number | null;
             activeChatId: number | null;
+            activeSessionId: number | null;
+            fallbackSessionId: number | null;
             activeParticipantCount: number;
             createdAt: string;
         }>(`/rooms/${roomId}`);
     },
 
-    setActiveMeeting: async (roomId: number, meetingId: number | null, chatId: number | null, summary?: string | null) => {
+    setActiveMeeting: async (
+        roomId: number,
+        meetingId: number | null,
+        chatId: number | null,
+        summary?: string | null,
+        sessionId?: number | null,
+    ) => {
         return apiCall<{ success: boolean }>(`/rooms/${roomId}/active-meeting`, {
             method: 'POST',
-            body: JSON.stringify({ meetingId, chatId, summary: summary ?? null }),
+            body: JSON.stringify({ meetingId, chatId, sessionId: sessionId ?? null, summary: summary ?? null }),
         });
     },
 
