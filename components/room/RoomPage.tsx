@@ -193,7 +193,7 @@ function VideoTile({
                     ref={attachStream}
                     autoPlay
                     playsInline
-                    className={`w-full h-full object-cover ${cameraOff ? 'invisible' : ''}`}
+                    className={`w-full h-full object-cover ${cameraOff ? 'invisible' : ''} ${isLocal ? 'scale-x-[-1]' : ''}`}
                 />
             )}
             {cameraOff && (

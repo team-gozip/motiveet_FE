@@ -388,7 +388,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                         <p className="text-xs font-semibold text-[var(--foreground)] text-[var(--text-secondary)] mb-3 uppercase tracking-wider">빠른 시작</p>
                         <div className="space-y-2">
                             <button
-                                onClick={() => setShowTypeModal(true)}
+                                onClick={() => setPendingRoomType('ONLINE')}
                                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-indigo-500/10 border border-transparent hover:border-indigo-400/30 transition-all group"
                             >
                                 <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0">
@@ -399,7 +399,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                                 <span className="text-sm text-[var(--foreground)] text-[var(--text-secondary)] group-hover:opacity-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">온라인 회의 시작</span>
                             </button>
                             <button
-                                onClick={() => setShowTypeModal(true)}
+                                onClick={() => setPendingRoomType('OFFLINE')}
                                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-500/10 border border-transparent hover:border-emerald-400/30 transition-all group"
                             >
                                 <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0">
