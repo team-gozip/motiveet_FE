@@ -24,8 +24,10 @@ function getMyUserId(): string {
 
 function getWsBase(): string {
     if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    // xquare 배포 도메인: FE는 motiveet-online.dsmhs.kr, BE(WS)는 motiveet-online-api.dsmhs.kr
+    if (host === 'motiveet-online.dsmhs.kr') return 'wss://motiveet-online-api.dsmhs.kr';
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const host = window.location.hostname;
     return `${proto}://${host}:8000`;
 }
 
