@@ -241,7 +241,8 @@ export default function OfflineRoomPage({
         if (isStartingMeeting) return;
         setIsStartingMeeting(true);
         try {
-            const resp = await meetingApi.start(roomName || '오프라인 회의');
+            // roomId 전달 → BE가 room.note를 meeting.memo 초기값으로 복사 + fallback chat/session 재사용
+            const resp = await meetingApi.start(roomName || '오프라인 회의', roomId);
             if (resp.success) {
                 hasStartedMeetingRef.current = true;
                 setMeetingId(resp.meetingId);
@@ -268,9 +269,17 @@ export default function OfflineRoomPage({
         setIsEndingMeeting(true);
         setIsSummaryLoading(true);
 
+        // 현재 room.note 를 가져와 meeting end body.memo 에 담아 요약에 반영.
+        // SharedMemo debounce(1s) 를 기다리진 않으므로 직전 키입력은 누락될 수 있음 — 허용 범위.
+        let latestMemo: string | undefined = undefined;
+        try {
+            const roomLatest = await roomApi.getById(roomId);
+            latestMemo = roomLatest.note ?? undefined;
+        } catch { /* ignore — end with whatever BE has */ }
+
         // allSettled로 둘 다 독립 실행 — 하나 실패해도 다른 하나는 완료시킴
         const [endResult, clearResult] = await Promise.allSettled([
-            meetingApi.end(currentMeetingId),
+            meetingApi.end(currentMeetingId, latestMemo),
             roomApi.setActiveMeeting(roomId, null, null),
         ]);
 
@@ -492,39 +501,31 @@ export default function OfflineRoomPage({
                 {/* 오른쪽: 상태에 따라 다른 레이아웃 */}
                 <div className="flex-1 flex flex-col overflow-hidden">
 
-                    {isActive ? (
-                        /* ── 회의 중: 추출된 주제 상단 + 메모 하단 ── */
-                        <>
-                            {/* 추출된 주제 strip */}
-                            <div className="flex-shrink-0 border-b border-[var(--border-color)]">
+                    {/* 상단: 회의 중이면 주제 strip + 메모장 라벨, 아니면 탭 헤더 */}
+                    <div className="flex-shrink-0">
+                        {isActive ? (
+                            <>
+                                <div className="border-b border-[var(--border-color)]">
+                                    <div className="px-4 py-2 border-b border-[var(--border-color)] bg-[var(--highlight-bg)]">
+                                        <span className="text-[10px] font-bold text-[var(--foreground)] text-[var(--text-secondary)] uppercase tracking-wider">
+                                            추출된 주제
+                                        </span>
+                                    </div>
+                                    <OfflineCenterPanel
+                                        meetingId={meetingId}
+                                        roomName={roomName}
+                                        isActive={isActive}
+                                        onResearch={(topic) => chatRef.current?.handleResearch(topic)}
+                                    />
+                                </div>
                                 <div className="px-4 py-2 border-b border-[var(--border-color)] bg-[var(--highlight-bg)]">
                                     <span className="text-[10px] font-bold text-[var(--foreground)] text-[var(--text-secondary)] uppercase tracking-wider">
-                                        추출된 주제
+                                        메모장
                                     </span>
                                 </div>
-                                <OfflineCenterPanel
-                                    meetingId={meetingId}
-                                    roomName={roomName}
-                                    isActive={isActive}
-                                    onResearch={(topic) => chatRef.current?.handleResearch(topic)}
-                                />
-                            </div>
-
-                            {/* 메모장 (회의 중에는 고정) */}
-                            <div className="flex-shrink-0 px-4 py-2 border-b border-[var(--border-color)] bg-[var(--highlight-bg)]">
-                                <span className="text-[10px] font-bold text-[var(--foreground)] text-[var(--text-secondary)] uppercase tracking-wider">
-                                    메모장
-                                </span>
-                            </div>
-                            <div className="flex-1 overflow-hidden">
-                                <SharedMemo roomId={roomId} />
-                            </div>
-                        </>
-                    ) : (
-                        /* ── 회의 전/후: 메모 | AI 요약 탭 ── */
-                        <>
-                            {/* 탭 헤더 */}
-                            <div className="flex-shrink-0 flex items-center border-b border-[var(--border-color)] bg-[var(--highlight-bg)]">
+                            </>
+                        ) : (
+                            <div className="flex items-center border-b border-[var(--border-color)] bg-[var(--highlight-bg)]">
                                 <button
                                     onClick={() => setPostMeetingView('memo')}
                                     className={`px-5 py-3 text-[11px] font-bold border-r border-[var(--border-color)] transition-all ${
@@ -553,20 +554,24 @@ export default function OfflineRoomPage({
                                     )}
                                 </button>
                             </div>
+                        )}
+                    </div>
 
-                            {/* 탭 내용 */}
-                            <div className="flex-1 overflow-hidden">
-                                {postMeetingView === 'memo' ? (
-                                    <SharedMemo roomId={roomId} />
-                                ) : (
-                                    <MeetingSummary
-                                        summary={hostSummary}
-                                        isLoading={isSummaryLoading}
-                                    />
-                                )}
+                    {/* 하단: SharedMemo는 항상 같은 위치에 mount 유지 (isActive 변경 시 remount 방지)
+                        회의 전/후 요약 탭 선택 시에는 CSS로 숨기고 MeetingSummary를 위에 덮어 출력 */}
+                    <div className="flex-1 overflow-hidden relative">
+                        <div className={!isActive && postMeetingView === 'summary' ? 'hidden' : 'h-full'}>
+                            <SharedMemo roomId={roomId} />
+                        </div>
+                        {!isActive && postMeetingView === 'summary' && (
+                            <div className="absolute inset-0">
+                                <MeetingSummary
+                                    summary={hostSummary}
+                                    isLoading={isSummaryLoading}
+                                />
                             </div>
-                        </>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
 

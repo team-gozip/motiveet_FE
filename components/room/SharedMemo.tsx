@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { roomApi } from '@/lib/api';
+import { roomApi, getAccessToken } from '@/lib/api';
 
 interface SharedMemoProps {
     roomId: number;
@@ -91,11 +91,19 @@ export default function SharedMemo({ roomId }: SharedMemoProps) {
     }, [save]);
 
     // 언마운트 시 미저장 내용 flush
+    // keepalive=true 로 브라우저가 요청을 unload/refresh 후에도 완료하도록 보장
     useEffect(() => {
         return () => {
             clearTimeout(debounceRef.current);
-            // fire-and-forget: 언마운트 시 현재 내용 즉시 저장 시도
-            roomApi.updateNotes(roomId, contentRef.current).catch(() => {});
+            const token = getAccessToken();
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            fetch(`/api/rooms/${roomId}/notes`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ content: contentRef.current }),
+                keepalive: true,
+            }).catch(() => {});
         };
     }, [roomId]);
 

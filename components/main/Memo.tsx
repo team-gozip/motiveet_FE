@@ -19,6 +19,8 @@ export default function Memo({ meetingId, initialContent, readOnly, onContentCha
     const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     // meetingId가 바뀔 때 이전 회의 잔여 타이머가 새 회의의 memo를 덮어쓰는 것을 방지
     const activeMeetingId = useRef<number | null>(null);
+    // unmount 시 미전송 debounce 저장을 flush 하기 위한 pending 상태
+    const pendingSaveRef = useRef<{ meetingId: number; content: string } | null>(null);
 
     useEffect(() => {
         activeMeetingId.current = meetingId;
@@ -27,6 +29,17 @@ export default function Memo({ meetingId, initialContent, readOnly, onContentCha
         if (onContentChange) onContentChange(next);
         setIsSaved(false);
     }, [meetingId, initialContent, onContentChange]);
+
+    useEffect(() => {
+        return () => {
+            if (saveTimer.current) clearTimeout(saveTimer.current);
+            const pending = pendingSaveRef.current;
+            if (pending) {
+                meetingApi.updateMemo(pending.meetingId, pending.content)
+                    .catch(err => console.error('[Memo] flush save failed:', err));
+            }
+        };
+    }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newContent = e.target.value;
@@ -37,11 +50,18 @@ export default function Memo({ meetingId, initialContent, readOnly, onContentCha
         const targetMeetingId = meetingId;
         if (saveTimer.current) clearTimeout(saveTimer.current);
         setIsSaved(false);
+        pendingSaveRef.current = { meetingId: targetMeetingId, content: newContent };
         saveTimer.current = setTimeout(async () => {
             try {
                 await meetingApi.updateMemo(targetMeetingId, newContent);
                 if (activeMeetingId.current === targetMeetingId) {
                     setIsSaved(true);
+                }
+                if (
+                    pendingSaveRef.current?.meetingId === targetMeetingId &&
+                    pendingSaveRef.current?.content === newContent
+                ) {
+                    pendingSaveRef.current = null;
                 }
             } catch (err) {
                 console.error('[Memo] save failed:', err);
