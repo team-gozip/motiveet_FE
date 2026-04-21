@@ -484,6 +484,8 @@ export const roomApi = {
             activeSessionId: number | null;
             fallbackSessionId: number | null;
             fallbackChatId: number | null;
+            lastChatId: number | null;
+            lastSessionId: number | null;
             activeParticipantCount: number;
             createdAt: string;
         }>(`/rooms/${roomId}`);

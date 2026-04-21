@@ -953,6 +953,8 @@ interface RoomInfo {
     summary: string | null;
     note: string | null;
     transcript: string | null;
+    lastChatId: number | null;
+    lastSessionId: number | null;
 }
 
 export default function RoomPage({ roomId }: { roomId: number }) {
@@ -974,6 +976,8 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                     summary: info.summary ?? null,
                     note: info.note ?? null,
                     transcript: info.transcript ?? null,
+                    lastChatId: info.lastChatId ?? null,
+                    lastSessionId: info.lastSessionId ?? null,
                 });
             })
             .catch(() => {
@@ -981,6 +985,7 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                     type: 'ONLINE', name: '', status: 'WAITING', hostId: 0, folderId: 0,
                     controllerId: null, activeMeetingId: null, activeChatId: null,
                     summary: null, note: null, transcript: null,
+                    lastChatId: null, lastSessionId: null,
                 });
             });
     }, [roomId]);
@@ -1003,6 +1008,8 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                 note={roomInfo.note}
                 summary={roomInfo.summary}
                 transcript={roomInfo.transcript}
+                lastChatId={roomInfo.lastChatId}
+                lastSessionId={roomInfo.lastSessionId}
                 onBack={() => router.push(`/folder/${roomInfo.folderId}`)}
             />
         );
@@ -1035,6 +1042,8 @@ function EndedRoomView({
     note,
     summary,
     transcript,
+    lastChatId,
+    lastSessionId,
     onBack,
 }: {
     roomId: number;
@@ -1043,17 +1052,19 @@ function EndedRoomView({
     note: string | null;
     summary: string | null;
     transcript: string | null;
+    lastChatId: number | null;
+    lastSessionId: number | null;
     onBack: () => void;
 }) {
     const isOnline = type === 'ONLINE';
-    // 온라인: 메모 + 녹취록 / 오프라인: 메모 + AI 요약
-    const [activeTab, setActiveTab] = useState<'memo' | 'transcript' | 'summary'>('memo');
+    // 메모 / 회의 요약 / AI 채팅
+    const [activeTab, setActiveTab] = useState<'memo' | 'summary' | 'chat'>('memo');
     const [roomSummary, setRoomSummary] = useState<string | null>(summary);
     const [isSummaryLoading, setIsSummaryLoading] = useState(false);
 
-    // 오프라인 회의에서 summary가 없으면 서버에서 생성 요청
+    // summary가 없으면 서버에서 재조회
     useEffect(() => {
-        if (!isOnline && !roomSummary) {
+        if (!roomSummary) {
             setIsSummaryLoading(true);
             roomApi.getById(roomId).then(info => {
                 if (info.summary) {
@@ -1061,17 +1072,13 @@ function EndedRoomView({
                 }
             }).catch(() => {}).finally(() => setIsSummaryLoading(false));
         }
-    }, [isOnline, roomSummary, roomId]);
+    }, [roomSummary, roomId]);
 
-    const tabs = isOnline
-        ? [
-            { key: 'memo' as const, label: '메모' },
-            { key: 'transcript' as const, label: '녹취록' },
-          ]
-        : [
-            { key: 'memo' as const, label: '메모' },
-            { key: 'summary' as const, label: 'AI 요약' },
-          ];
+    const tabs = [
+        { key: 'memo' as const, label: '메모' },
+        { key: 'summary' as const, label: '회의 요약' },
+        { key: 'chat' as const, label: 'AI 채팅 내역' },
+    ];
 
     return (
         <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col">
@@ -1135,24 +1142,9 @@ function EndedRoomView({
                     </div>
                 )}
 
-                {activeTab === 'transcript' && (
-                    <div className="max-w-3xl mx-auto px-6 py-8">
-                        <h2 className="text-lg font-bold mb-4">녹취록</h2>
-                        {transcript ? (
-                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 whitespace-pre-wrap text-sm leading-relaxed">
-                                {transcript}
-                            </div>
-                        ) : (
-                            <div className="text-center py-16">
-                                <p className="text-sm text-[var(--foreground)] opacity-30">녹취록이 없습니다.</p>
-                            </div>
-                        )}
-                    </div>
-                )}
-
                 {activeTab === 'summary' && (
                     <div className="max-w-3xl mx-auto px-6 py-8">
-                        <h2 className="text-lg font-bold mb-4">AI 회의 요약</h2>
+                        <h2 className="text-lg font-bold mb-4">회의 요약</h2>
                         {isSummaryLoading ? (
                             <div className="text-center py-16">
                                 <div className="mx-auto w-8 h-8 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin mb-3" />
@@ -1162,9 +1154,32 @@ function EndedRoomView({
                             <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none">
                                 <div dangerouslySetInnerHTML={{ __html: roomSummary.replace(/\n/g, '<br/>') }} />
                             </div>
+                        ) : isOnline && transcript ? (
+                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 whitespace-pre-wrap text-sm leading-relaxed">
+                                {transcript}
+                            </div>
                         ) : (
                             <div className="text-center py-16">
-                                <p className="text-sm text-[var(--foreground)] opacity-30">AI 요약이 없습니다.</p>
+                                <p className="text-sm text-[var(--foreground)] opacity-30">회의 요약이 없습니다.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'chat' && (
+                    <div className="max-w-3xl mx-auto px-6 py-8 h-full">
+                        <h2 className="text-lg font-bold mb-4">AI 채팅 내역</h2>
+                        {lastChatId ? (
+                            <div className="h-[calc(100vh-220px)] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl overflow-hidden">
+                                <ChatInterface
+                                    chatId={lastChatId}
+                                    sessionId={lastSessionId}
+                                    isMeetingActive={false}
+                                />
+                            </div>
+                        ) : (
+                            <div className="text-center py-16">
+                                <p className="text-sm text-[var(--foreground)] opacity-30">AI 채팅 내역이 없습니다.</p>
                             </div>
                         )}
                     </div>
