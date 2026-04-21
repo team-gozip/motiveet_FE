@@ -34,16 +34,34 @@ export default function MeetingControls({
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     const isThisRecording = isRecording && activeMeetingId === meetingId;
+    const elapsedStorageKey = meetingId ? `motiveet:meeting:${meetingId}:elapsedSecs` : null;
 
+    // meetingId 바뀔 때 누적값 복원 (새로고침/재진입 대응)
     useEffect(() => {
-        if (isThisRecording) {
-            setElapsedSecs(0);
-            timerRef.current = setInterval(() => setElapsedSecs(s => s + 1), 1000);
-        } else {
+        if (!elapsedStorageKey) { setElapsedSecs(0); return; }
+        try {
+            const saved = localStorage.getItem(elapsedStorageKey);
+            setElapsedSecs(saved ? Math.max(0, parseInt(saved, 10) || 0) : 0);
+        } catch { setElapsedSecs(0); }
+    }, [elapsedStorageKey]);
+
+    // 녹음 중일 때만 +1/sec, 나가 있거나 미활성 시엔 멈춤
+    useEffect(() => {
+        if (!isThisRecording) {
             if (timerRef.current) clearInterval(timerRef.current);
+            return;
         }
+        timerRef.current = setInterval(() => {
+            setElapsedSecs(s => {
+                const next = s + 1;
+                if (elapsedStorageKey) {
+                    try { localStorage.setItem(elapsedStorageKey, String(next)); } catch { /* ignore */ }
+                }
+                return next;
+            });
+        }, 1000);
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
-    }, [isThisRecording]);
+    }, [isThisRecording, elapsedStorageKey]);
 
     const handleStart = async () => {
         setIsModalOpen(false);
@@ -52,6 +70,8 @@ export default function MeetingControls({
         try {
             const resp = await meetingApi.start(title);
             if (resp.success) {
+                try { localStorage.removeItem(`motiveet:meeting:${resp.meetingId}:elapsedSecs`); } catch { /* ignore */ }
+                setElapsedSecs(0);
                 onMeetingStart(resp.meetingId, resp.chatId);
                 await startGlobalMeeting(resp.meetingId, resp.chatId);
             }
@@ -68,6 +88,7 @@ export default function MeetingControls({
         try {
             const resp = await meetingApi.end(meetingId, memo);
             if (resp.success) {
+                try { localStorage.removeItem(`motiveet:meeting:${meetingId}:elapsedSecs`); } catch { /* ignore */ }
                 endGlobalMeeting();
                 onMeetingEnd(resp.summary);
             }

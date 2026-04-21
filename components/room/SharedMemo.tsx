@@ -28,8 +28,14 @@ export default function SharedMemo({ roomId }: SharedMemoProps) {
 
     const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const contentRef = useRef('');
+    const lastSavedRef = useRef<string | null>(null);
     const isSavingRef = useRef(false);
     const pendingSaveRef = useRef<string | null>(null);
+    // 서버에서 초기 데이터를 한 번이라도 수신했는가. 이 값이 false면 저장 일체 금지
+    // (초기 로드 이전에 빈 문자열로 서버 메모를 덮어쓰는 사고 방지).
+    const hasLoadedRef = useRef(false);
+    // 사용자가 실제로 입력을 바꾼 적이 있는가. 이 값이 true일 때만 저장 실행.
+    const isDirtyRef = useRef(false);
 
     // content 최신값을 ref에 동기화 (unmount flush에서 사용)
     useEffect(() => {
@@ -39,16 +45,23 @@ export default function SharedMemo({ roomId }: SharedMemoProps) {
     // 마운트 시 서버 노트 로드
     useEffect(() => {
         let cancelled = false;
+        // roomId가 바뀔 때는 이전 룸의 로드 상태를 초기화 (안전장치)
+        hasLoadedRef.current = false;
+        isDirtyRef.current = false;
         roomApi.getById(roomId)
             .then(room => {
                 if (!cancelled) {
-                    setContent(room.note || '');
-                    contentRef.current = room.note || '';
+                    const loaded = room.note || '';
+                    setContent(loaded);
+                    contentRef.current = loaded;
+                    lastSavedRef.current = loaded;
+                    hasLoadedRef.current = true;  // 로드 성공 시에만 저장 허용
                     setSaveStatus('idle');
                 }
             })
             .catch(err => {
                 console.error('[SharedMemo] failed to load note:', err);
+                // 실패 시 hasLoadedRef는 false 유지 → 저장 금지
             })
             .finally(() => {
                 if (!cancelled) setIsLoading(false);
@@ -57,6 +70,10 @@ export default function SharedMemo({ roomId }: SharedMemoProps) {
     }, [roomId]);
 
     const save = useCallback(async (text: string): Promise<void> => {
+        // 초기 로드 전/로드 실패 상태에서는 절대 저장 금지 — 빈 문자열로 서버 값 덮어쓰기 방지
+        if (!hasLoadedRef.current) return;
+        // 사용자가 실제로 변경한 적이 없으면 저장 생략
+        if (!isDirtyRef.current) return;
         if (isSavingRef.current) {
             pendingSaveRef.current = text;
             return;
@@ -65,6 +82,11 @@ export default function SharedMemo({ roomId }: SharedMemoProps) {
         setSaveStatus('saving');
         try {
             await roomApi.updateNotes(roomId, text);
+            lastSavedRef.current = text;
+            // 저장 성공 이후, 현재 ref가 같은 값이면 dirty 해제
+            if (contentRef.current === text) {
+                isDirtyRef.current = false;
+            }
             setSaveStatus('saved');
             console.log('[SharedMemo] saved, length:', text.length);
             // 저장 완료 후 대기 중인 저장이 있으면 처리
@@ -84,28 +106,74 @@ export default function SharedMemo({ roomId }: SharedMemoProps) {
 
     const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const val = e.target.value;
+        // 사용자 입력 → dirty 플래그 set
+        isDirtyRef.current = true;
         setContent(val);
         setSaveStatus('saving');
         clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => save(val), 1000);
+        debounceRef.current = setTimeout(() => save(val), 400);
     }, [save]);
 
-    // 언마운트 시 미저장 내용 flush
-    // keepalive=true 로 브라우저가 요청을 unload/refresh 후에도 완료하도록 보장
-    useEffect(() => {
-        return () => {
-            clearTimeout(debounceRef.current);
-            const token = getAccessToken();
-            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+    // keepalive fetch로 미저장 내용 즉시 flush (unmount / pagehide 공용)
+    const flushNote = useCallback(() => {
+        clearTimeout(debounceRef.current);
+        // 초기 로드 전이면 절대 저장하지 않음 (빈 문자열 덮어쓰기 사고 차단)
+        if (!hasLoadedRef.current) return;
+        // 사용자가 실제로 변경하지 않았으면 저장 생략
+        if (!isDirtyRef.current) return;
+        const current = contentRef.current;
+        if (lastSavedRef.current === current) return;
+        const token = getAccessToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        try {
             fetch(`/api/rooms/${roomId}/notes`, {
                 method: 'PUT',
                 headers,
-                body: JSON.stringify({ content: contentRef.current }),
+                body: JSON.stringify({ content: current }),
                 keepalive: true,
             }).catch(() => {});
-        };
+            lastSavedRef.current = current;
+            isDirtyRef.current = false;
+        } catch { /* ignore */ }
     }, [roomId]);
+
+    // 10초마다 미저장 내용을 주기적으로 서버에 저장 (debounce/unload flush를 보완)
+    // 브라우저가 예기치 않게 꺼지거나 네트워크 이슈로 flush가 누락되는 극단 상황 대비.
+    useEffect(() => {
+        const id = setInterval(() => {
+            // 초기 로드 전/미변경 상태면 저장 생략
+            if (!hasLoadedRef.current) return;
+            if (!isDirtyRef.current) return;
+            const current = contentRef.current;
+            if (lastSavedRef.current === current) return;
+            if (isSavingRef.current) {
+                pendingSaveRef.current = current;
+                return;
+            }
+            save(current);
+        }, 10000);
+        return () => clearInterval(id);
+    }, [save]);
+
+    // 언마운트 시 미저장 내용 flush (SPA 이탈)
+    useEffect(() => {
+        return () => { flushNote(); };
+    }, [flushNote]);
+
+    // 탭 닫기/새로고침/백그라운드 전환 시에도 flush (React cleanup은 unload에서 실행 안 됨)
+    useEffect(() => {
+        const onHide = () => flushNote();
+        const onVisibility = () => { if (document.visibilityState === 'hidden') flushNote(); };
+        window.addEventListener('pagehide', onHide);
+        window.addEventListener('beforeunload', onHide);
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => {
+            window.removeEventListener('pagehide', onHide);
+            window.removeEventListener('beforeunload', onHide);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
+    }, [flushNote]);
 
     if (isLoading) {
         return (

@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOfflineRoom } from '@/hooks/useOfflineRoom';
 import { useRoomHeartbeat } from '@/hooks/useRoomHeartbeat';
-import { roomApi, meetingApi, getAccessToken } from '@/lib/api';
+import { roomApi, meetingApi } from '@/lib/api';
 import { useMeeting } from '@/components/providers/MeetingProvider';
 import ChatInterface from '@/components/main/ChatInterface';
 import MeetingSummary from '@/components/main/MeetingSummary';
@@ -72,9 +72,13 @@ export default function OfflineRoomPage({
     const hasStartedMeetingRef = useRef<boolean>(!!initialMeetingId || !!initialSummary);
 
     // ── 타이머 ───────────────────────────────────────────────────
+    // 회의 진행(녹음) 중일 때만 +1/sec 카운트. 나가 있는 동안은 멈춤.
+    // 새로고침 공백은 localStorage에 누적값을 저장해 이어서 재개.
     const [elapsedSecs, setElapsedSecs] = useState(0);
     const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
     const chatRef = useRef<{ handleResearch: (topic: string) => Promise<void> } | null>(null);
+
+    const elapsedStorageKey = meetingId ? `motiveet:meeting:${meetingId}:elapsedSecs` : null;
 
     const { startGlobalMeeting, endGlobalMeeting, volume, isRecording, activeMeetingId } = useMeeting();
     const isThisRecording = isRecording && activeMeetingId === meetingId;
@@ -121,16 +125,39 @@ export default function OfflineRoomPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ── 타이머 ───────────────────────────────────────────────────
+    // ── 타이머 누적값 복원 (meetingId 바뀔 때) ──────────────────
+    // 새로고침 등으로 재진입 시 이전에 쌓아둔 초를 이어받음.
     useEffect(() => {
-        if (isThisRecording) {
+        if (!elapsedStorageKey) {
             setElapsedSecs(0);
-            timerRef.current = setInterval(() => setElapsedSecs(s => s + 1), 1000);
-        } else {
-            clearInterval(timerRef.current);
+            return;
         }
+        try {
+            const saved = localStorage.getItem(elapsedStorageKey);
+            setElapsedSecs(saved ? Math.max(0, parseInt(saved, 10) || 0) : 0);
+        } catch {
+            setElapsedSecs(0);
+        }
+    }, [elapsedStorageKey]);
+
+    // ── 타이머 tick ─────────────────────────────────────────────
+    // 녹음 중일 때만 +1/sec. 나가 있거나 회의 미활성 상태면 멈춤(현재 값 유지).
+    useEffect(() => {
+        if (!isThisRecording) {
+            clearInterval(timerRef.current);
+            return;
+        }
+        timerRef.current = setInterval(() => {
+            setElapsedSecs(s => {
+                const next = s + 1;
+                if (elapsedStorageKey) {
+                    try { localStorage.setItem(elapsedStorageKey, String(next)); } catch { /* ignore */ }
+                }
+                return next;
+            });
+        }, 1000);
         return () => clearInterval(timerRef.current);
-    }, [isThisRecording]);
+    }, [isThisRecording, elapsedStorageKey]);
 
     // ── 회의 종료 후 자동으로 AI 요약 탭으로 전환 ────────────────
     useEffect(() => {
@@ -139,31 +166,10 @@ export default function OfflineRoomPage({
         }
     }, [hostSummary, isSummaryLoading, isActive]);
 
-    // ── 탭 닫힘/새로고침 시 룸 정리 (좀비 룸 방지) ────────────────
-    // SPA router.push로 이탈 시엔 pagehide가 안 뜨므로 정상 handleLeave 경로로 처리됨.
-    // 실제 탭 닫기/크래시/네트워크 끊김엔 keepalive fetch가 BE에 leave + end 신호 전달.
-    useEffect(() => {
-        const onUnload = () => {
-            const token = getAccessToken();
-            if (!token) return;
-            const headers = {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            };
-            fetch(`/api/rooms/${roomId}/leave`, {
-                method: 'POST', headers, keepalive: true,
-            }).catch(() => {});
-            // 회의 시작 전 이탈은 방을 재사용 가능한 WAITING으로 유지.
-            // 시작 이후에만 end 비컨 전송.
-            if (isHost && hasStartedMeetingRef.current) {
-                fetch(`/api/rooms/${roomId}/end`, {
-                    method: 'POST', headers, keepalive: true,
-                }).catch(() => {});
-            }
-        };
-        window.addEventListener('pagehide', onUnload);
-        return () => window.removeEventListener('pagehide', onUnload);
-    }, [roomId, isHost]);
+    // 새로고침/탭닫기 시엔 pagehide에서 아무것도 하지 않음.
+    // 이유: pagehide는 refresh와 close를 구분 못 해서 리로드 시에도 방이 종료되는 문제가 있었음.
+    // 좀비 룸은 BE 백그라운드 sweeper(PARTICIPANT_STALE_SECONDS=90s, 30s 주기)가 자동 정리.
+    // heartbeat(30s 간격)이 살아있는 동안은 방이 유지되므로 새로고침 공백은 충분히 커버됨.
 
     // ── 비생성자: 5초 폴링으로 회의 종료 + 요약 감지 ─────────────
     // 실패 탈출구:
@@ -250,6 +256,9 @@ export default function OfflineRoomPage({
                 setMeetingId(resp.meetingId);
                 setChatId(resp.chatId);
                 setHostSummary(null);
+                // 새 회의 시작 시 누적 초기화
+                try { localStorage.removeItem(`motiveet:meeting:${resp.meetingId}:elapsedSecs`); } catch { /* ignore */ }
+                setElapsedSecs(0);
                 await Promise.all([
                     startGlobalMeeting(resp.meetingId, resp.chatId),
                     roomApi.setActiveMeeting(roomId, resp.meetingId, resp.chatId),
@@ -288,6 +297,7 @@ export default function OfflineRoomPage({
         // FE 상태는 항상 정리 — BE 일부 실패해도 회의는 사실상 종료된 것으로 처리
         // (pagehide 비컨 + BE stale sweep이 좀비 상태를 복구)
         endGlobalMeeting();
+        try { localStorage.removeItem(`motiveet:meeting:${currentMeetingId}:elapsedSecs`); } catch { /* ignore */ }
         setMeetingId(null);
         setChatId(null); // effectiveChatId는 dedicatedChatId로 폴백
 

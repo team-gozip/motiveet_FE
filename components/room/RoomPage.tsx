@@ -7,6 +7,9 @@ import { useRoomHeartbeat } from '@/hooks/useRoomHeartbeat';
 import { roomApi, meetingApi, getAccessToken } from '@/lib/api';
 import OfflineRoomPage from './OfflineRoomPage';
 import ChatInterface from '@/components/main/ChatInterface';
+import SharedMemo from './SharedMemo';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 function getCurrentUserId(): number | null {
     const token = getAccessToken();
@@ -315,10 +318,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
     const isHost = getCurrentUserId() === hostId;
 
     // ── 기본 상태 ────────────────────────────────────────────────────
-    const [notes, setNotes] = useState('');
-    const [notesSaved, setNotesSaved] = useState(false);
     const [isLeavingRoom, setIsLeavingRoom] = useState(false);
-    const notesSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     // ── 회의(meeting) 상태 ──────────────────────────────────────────
     const [meetingId, setMeetingId] = useState<number | null>(null);
@@ -354,7 +354,6 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
     // ── 초기 로드 ───────────────────────────────────────────────────
     useEffect(() => {
         roomApi.getById(roomId).then(info => {
-            if (info.note) setNotes(info.note);
             // 이미 진행 중인 회의가 있으면 복원
             if (info.activeMeetingId) {
                 setMeetingId(info.activeMeetingId);
@@ -588,19 +587,6 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
         }
     };
 
-    // ── 메모 ────────────────────────────────────────────────────────
-    const handleNotesChange = (text: string) => {
-        setNotes(text);
-        setNotesSaved(false);
-        clearTimeout(notesSaveTimer.current);
-        notesSaveTimer.current = setTimeout(async () => {
-            try {
-                await roomApi.updateNotes(roomId, text);
-                setNotesSaved(true);
-            } catch { /* ignore */ }
-        }, 1500);
-    };
-
     const handleLeaveClick = () => {
         if (recordingTarget) {
             sendRecordStop(recordingTarget);
@@ -792,16 +778,8 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
 
                             {/* 메모 */}
                             {sidePanel === 'memo' && (
-                                <div className="h-full flex flex-col p-3 gap-1">
-                                    {notesSaved && (
-                                        <span className="text-[10px] text-emerald-400 text-right">저장됨</span>
-                                    )}
-                                    <textarea
-                                        value={notes}
-                                        onChange={(e) => handleNotesChange(e.target.value)}
-                                        placeholder="회의 내용을 여기에 적어두세요..."
-                                        className="flex-1 bg-gray-800/60 border border-white/10 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 resize-none"
-                                    />
+                                <div className="h-full">
+                                    <SharedMemo roomId={roomId} />
                                 </div>
                             )}
                         </div>
@@ -1131,8 +1109,8 @@ function EndedRoomView({
                     <div className="max-w-3xl mx-auto px-6 py-8">
                         <h2 className="text-lg font-bold mb-4">회의 메모</h2>
                         {note ? (
-                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 whitespace-pre-wrap text-sm leading-relaxed">
-                                {note}
+                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{note}</ReactMarkdown>
                             </div>
                         ) : (
                             <div className="text-center py-16">
@@ -1152,11 +1130,11 @@ function EndedRoomView({
                             </div>
                         ) : roomSummary ? (
                             <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none">
-                                <div dangerouslySetInnerHTML={{ __html: roomSummary.replace(/\n/g, '<br/>') }} />
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{roomSummary}</ReactMarkdown>
                             </div>
                         ) : isOnline && transcript ? (
-                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 whitespace-pre-wrap text-sm leading-relaxed">
-                                {transcript}
+                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{transcript}</ReactMarkdown>
                             </div>
                         ) : (
                             <div className="text-center py-16">
