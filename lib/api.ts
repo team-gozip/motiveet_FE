@@ -528,6 +528,12 @@ export const roomApi = {
         });
     },
 
+    delete: async (roomId: number) => {
+        return apiCall<{ success: boolean }>(`/rooms/${roomId}`, {
+            method: 'DELETE',
+        });
+    },
+
     assignController: async (roomId: number, userId: number) => {
         return apiCall<{ controllerId: number }>(`/rooms/${roomId}/controller`, {
             method: 'POST',

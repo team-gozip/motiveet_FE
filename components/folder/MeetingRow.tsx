@@ -12,6 +12,9 @@ interface Room {
 interface MeetingRowProps {
     room: Room;
     onClick: () => void;
+    selectMode?: boolean;
+    checked?: boolean;
+    onToggle?: () => void;
 }
 
 const toKST = (ts: string) => {
@@ -36,14 +39,37 @@ const deriveBadge = (room: Room) => {
     return { text: '대기 중', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/20' };
 };
 
-export default function MeetingRow({ room, onClick }: MeetingRowProps) {
+export default function MeetingRow({ room, onClick, selectMode = false, checked = false, onToggle }: MeetingRowProps) {
     const { text: statusText, color: statusColor, bg: statusBg } = deriveBadge(room);
+
+    const handleClick = selectMode ? onToggle : onClick;
 
     return (
         <div
-            onClick={onClick}
-            className="flex items-center px-4 py-3.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-[var(--accent-primary)]/30 hover:shadow-sm cursor-pointer transition-all group"
+            onClick={handleClick}
+            className={`flex items-center px-4 py-3.5 rounded-xl border cursor-pointer transition-all group ${
+                selectMode && checked
+                    ? 'bg-red-50 dark:bg-red-950/20 border-red-400 dark:border-red-900/60'
+                    : 'bg-[var(--card-bg)] border-[var(--border-color)] hover:border-[var(--accent-primary)]/30 hover:shadow-sm'
+            }`}
         >
+            {/* Checkbox (select mode) */}
+            {selectMode && (
+                <div
+                    className={`flex-shrink-0 w-5 h-5 rounded border-2 mr-3 flex items-center justify-center transition-colors ${
+                        checked
+                            ? 'bg-red-500 border-red-500'
+                            : 'bg-transparent border-[var(--border-color)] group-hover:border-red-400'
+                    }`}
+                >
+                    {checked && (
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                    )}
+                </div>
+            )}
+
             {/* Type icon */}
             <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center mr-3 ${
                 room.type === 'ONLINE'
@@ -74,9 +100,11 @@ export default function MeetingRow({ room, onClick }: MeetingRowProps) {
             {/* Status + arrow */}
             <div className="flex items-center gap-3 flex-shrink-0">
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusColor} ${statusBg}`}>{statusText}</span>
-                <svg className="w-4 h-4 text-[var(--text-tertiary)] group-hover:text-[var(--accent-primary)] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                {!selectMode && (
+                    <svg className="w-4 h-4 text-[var(--text-tertiary)] group-hover:text-[var(--accent-primary)] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                )}
             </div>
         </div>
     );

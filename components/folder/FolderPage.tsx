@@ -122,6 +122,11 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     const [showTypeModal, setShowTypeModal] = useState(false);
     const [pendingRoomType, setPendingRoomType] = useState<'ONLINE' | 'OFFLINE' | null>(null);
     const [showBusyModal, setShowBusyModal] = useState(false);
+    // ── 삭제(선택) 모드 상태 ─────────────────────────────
+    const [deleteMode, setDeleteMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const loadRooms = useCallback(async () => {
         setIsLoading(true);
@@ -170,6 +175,42 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     const handleRoomCreated = (roomId: number) => {
         setPendingRoomType(null);
         router.push(`/room/${roomId}`);
+    };
+
+    // ── 삭제 모드 핸들러 ─────────────────────────────
+    const enterDeleteMode = () => {
+        setDeleteMode(true);
+        setSelectedIds(new Set());
+    };
+    const exitDeleteMode = () => {
+        setDeleteMode(false);
+        setSelectedIds(new Set());
+        setShowDeleteConfirm(false);
+    };
+    const toggleSelected = (roomId: number) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(roomId)) next.delete(roomId);
+            else next.add(roomId);
+            return next;
+        });
+    };
+    const confirmDelete = async () => {
+        if (selectedIds.size === 0) return;
+        setIsDeleting(true);
+        const ids = Array.from(selectedIds);
+        const results = await Promise.allSettled(ids.map(id => roomApi.delete(id)));
+        const failed = results.filter(r => r.status === 'rejected').length;
+        // 성공한 것들만 UI에서 제거
+        const succeeded = new Set(
+            ids.filter((_id, i) => results[i].status === 'fulfilled')
+        );
+        setRooms(prev => prev.filter(r => !succeeded.has(r.roomId)));
+        setIsDeleting(false);
+        if (failed > 0) {
+            window.alert(`${failed}개 회의 삭제에 실패했습니다. (호스트만 삭제할 수 있습니다)`);
+        }
+        exitDeleteMode();
     };
 
     const handleRoomClick = async (room: Room) => {
@@ -281,15 +322,50 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                                 <p className="text-xs text-[var(--foreground)] text-[var(--text-secondary)] mt-0.5">{currentFolder.description}</p>
                             )}
                         </div>
-                        <button
-                            onClick={() => setShowTypeModal(true)}
-                            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                            새 회의
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {deleteMode ? (
+                                <>
+                                    <span className="text-xs text-[var(--text-secondary)] mr-1">
+                                        {selectedIds.size}개 선택됨
+                                    </span>
+                                    <button
+                                        onClick={() => selectedIds.size > 0 && setShowDeleteConfirm(true)}
+                                        disabled={selectedIds.size === 0 || isDeleting}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-600/40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold transition-colors"
+                                    >
+                                        확인
+                                    </button>
+                                    <button
+                                        onClick={exitDeleteMode}
+                                        disabled={isDeleting}
+                                        className="px-4 py-2 bg-[var(--card-bg)] border border-[var(--border-color)] hover:bg-[var(--highlight-bg)] text-[var(--foreground)] rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                                    >
+                                        취소
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={enterDeleteMode}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-red-400 hover:text-red-500 text-[var(--text-secondary)] rounded-lg text-sm font-semibold transition-colors"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                                        </svg>
+                                        회의 제거
+                                    </button>
+                                    <button
+                                        onClick={() => setShowTypeModal(true)}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        새 회의
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     {/* Search */}
@@ -360,6 +436,9 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                                     key={room.roomId}
                                     room={room}
                                     onClick={() => handleRoomClick(room)}
+                                    selectMode={deleteMode}
+                                    checked={selectedIds.has(room.roomId)}
+                                    onToggle={() => toggleSelected(room.roomId)}
                                 />
                             ))}
                         </div>
@@ -433,6 +512,47 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                     onClose={() => setPendingRoomType(null)}
                     onCreated={handleRoomCreated}
                 />
+            )}
+
+            {/* Delete confirm modal */}
+            {showDeleteConfirm && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                    onClick={() => !isDeleting && setShowDeleteConfirm(false)}
+                >
+                    <div
+                        className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="w-12 h-12 rounded-2xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
+                            <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                            </svg>
+                        </div>
+                        <h3 className="text-sm font-semibold text-[var(--foreground)] mb-1">
+                            선택한 {selectedIds.size}개 회의를 삭제할까요?
+                        </h3>
+                        <p className="text-xs text-[var(--text-secondary)] mb-5">
+                            회의실과 참가자, 메모·요약이 모두 사라지며 되돌릴 수 없습니다.
+                        </p>
+                        <div className="flex items-center gap-2 justify-center">
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                disabled={isDeleting}
+                                className="px-5 py-2 bg-[var(--card-bg)] border border-[var(--border-color)] hover:bg-[var(--highlight-bg)] text-[var(--foreground)] rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                disabled={isDeleting}
+                                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                            >
+                                {isDeleting ? '삭제 중...' : '확인'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Offline busy modal */}
