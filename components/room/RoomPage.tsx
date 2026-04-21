@@ -310,7 +310,7 @@ function RecordPermissionModal({
 
 // ── OnlineRoomContent ────────────────────────────────────────────────
 
-function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number }) {
+function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostId: number; folderId: number }) {
     const router = useRouter();
     const isHost = getCurrentUserId() === hostId;
 
@@ -410,15 +410,15 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
         // 다른 참가자들에게 종료 알림 → 자신도 퇴장
         sendRoomEnded();
         leaveRoom();
-        router.push('/choose');
+        router.push(`/folder/${folderId}`);
     };
 
     const handleLeave = useCallback(async () => {
         if (isLeavingRoom) return;
         setIsLeavingRoom(true);
         try { await roomApi.leave(roomId); } catch { /* ignore */ }
-        router.push('/choose');
-    }, [roomId, router, isLeavingRoom]);
+        router.push(`/folder/${folderId}`);
+    }, [roomId, router, isLeavingRoom, folderId]);
 
     // ── 녹음 콜백 ───────────────────────────────────────────────────
     const handleRecordRequest = useCallback((req: RecordRequest) => {
@@ -447,8 +447,8 @@ function OnlineRoomContent({ roomId, hostId }: { roomId: number; hostId: number 
 
     const handleRoomEnded = useCallback(() => {
         // 호스트가 방을 종료함 → 참가자 자동 퇴장
-        router.push('/choose');
-    }, [router]);
+        router.push(`/folder/${folderId}`);
+    }, [router, folderId]);
 
     const {
         localStream, peers, isMicOn, isCameraOn, isScreenSharing, isConnected, error, myUserId,
@@ -946,6 +946,7 @@ interface RoomInfo {
     name: string;
     status: string;
     hostId: number;
+    folderId: number;
     controllerId: number | null;
     activeMeetingId: number | null;
     activeChatId: number | null;
@@ -966,6 +967,7 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                     name: info.name,
                     status: info.status,
                     hostId: info.hostId,
+                    folderId: info.folderId,
                     controllerId: info.controllerId,
                     activeMeetingId: info.activeMeetingId ?? null,
                     activeChatId: info.activeChatId ?? null,
@@ -976,7 +978,7 @@ export default function RoomPage({ roomId }: { roomId: number }) {
             })
             .catch(() => {
                 setRoomInfo({
-                    type: 'ONLINE', name: '', status: 'WAITING', hostId: 0,
+                    type: 'ONLINE', name: '', status: 'WAITING', hostId: 0, folderId: 0,
                     controllerId: null, activeMeetingId: null, activeChatId: null,
                     summary: null, note: null, transcript: null,
                 });
@@ -1001,7 +1003,7 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                 note={roomInfo.note}
                 summary={roomInfo.summary}
                 transcript={roomInfo.transcript}
-                onBack={() => router.push('/choose')}
+                onBack={() => router.push(`/folder/${roomInfo.folderId}`)}
             />
         );
     }
@@ -1012,6 +1014,7 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                 roomId={roomId}
                 roomName={roomInfo.name}
                 hostId={roomInfo.hostId}
+                folderId={roomInfo.folderId}
                 initialControllerId={roomInfo.controllerId}
                 initialMeetingId={roomInfo.activeMeetingId}
                 initialChatId={roomInfo.activeChatId}
@@ -1020,7 +1023,7 @@ export default function RoomPage({ roomId }: { roomId: number }) {
         );
     }
 
-    return <OnlineRoomContent roomId={roomId} hostId={roomInfo.hostId} />;
+    return <OnlineRoomContent roomId={roomId} hostId={roomInfo.hostId} folderId={roomInfo.folderId} />;
 }
 
 // ── EndedRoomView (종료된 회의 확인 페이지) ──────────────────────────

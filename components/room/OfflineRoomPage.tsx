@@ -21,6 +21,7 @@ interface OfflineRoomPageProps {
     roomId: number;
     roomName: string;
     hostId: number;
+    folderId: number;
     initialControllerId: number | null;
     initialMeetingId: number | null;
     initialChatId: number | null;
@@ -31,6 +32,7 @@ export default function OfflineRoomPage({
     roomId,
     roomName,
     hostId,
+    folderId,
     initialMeetingId,
     initialChatId,
     initialSummary,
@@ -85,8 +87,8 @@ export default function OfflineRoomPage({
         if (isLeavingRoom) return;
         setIsLeavingRoom(true);
         try { await roomApi.leave(roomId); } catch { /* ignore */ }
-        router.push('/choose');
-    }, [roomId, router, isLeavingRoom]);
+        router.push(`/folder/${folderId}`);
+    }, [roomId, router, isLeavingRoom, folderId]);
 
     const {
         isMicOn, isConnected, error,
