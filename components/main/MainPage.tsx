@@ -40,7 +40,6 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
     const isActive = !!currentMeeting && !currentMeeting.endedAt;
     const isThisRecording = isRecording && recordingMeetingId === currentMeeting?.meetingId;
 
-    // Auth check
     useEffect(() => {
         if (!isAuthenticated()) {
             router.push('/login');
@@ -56,17 +55,14 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
         }
     }, [initialMeetingId]);
 
-    // Reset transcript when meeting changes
     useEffect(() => {
         setTranscriptSegments([]);
         setSuggestedSubjects([]);
     }, [currentMeeting?.meetingId]);
 
-    // Process real-time audio analysis results
     useEffect(() => {
         if (!lastAnalysisResult || !currentMeeting?.meetingId || currentMeeting?.endedAt) return;
 
-        // Update topics
         const topics: string[] = lastAnalysisResult.suggestions || lastAnalysisResult.newTopics || [];
         if (topics.length > 0) {
             setSuggestedSubjects(prev => {
@@ -75,7 +71,6 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
             });
         }
 
-        // Append transcript segment if returned
         if (lastAnalysisResult.transcript) {
             setTranscriptSegments(prev => [...prev, {
                 id: ++_segId,
@@ -85,7 +80,6 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
         }
     }, [lastAnalysisResult]);
 
-    // Polling for topics (10s)
     useEffect(() => {
         const meetingId = currentMeeting?.meetingId;
         if (!meetingId || currentMeeting?.endedAt) return;
@@ -125,7 +119,7 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
         }
     };
 
-    const handleMeetingStart = (meetingId: number, newChatId: number) => {
+    const handleMeetingStart = (meetingId: number, _newChatId: number) => {
         setSidebarRefreshKey(k => k + 1);
         router.push(`/meeting/${meetingId}`);
     };
@@ -150,26 +144,30 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
     if (isLoading) {
         return (
             <div className="h-screen flex items-center justify-center bg-[var(--background)]">
-                <div className="w-8 h-8 border-2 border-[var(--border-color)] border-t-indigo-500 rounded-full animate-spin" />
+                <div className="w-6 h-6 border-2 border-[var(--border-color)] border-t-[var(--accent-primary)] rounded-full animate-spin" />
             </div>
         );
     }
 
     return (
         <div className="h-screen flex flex-col bg-[var(--background)] text-[var(--foreground)]">
-            {/* ── Header ── 48px ───────────────────────────────────────── */}
+            {/* Header */}
             <header className="flex-shrink-0 h-12 flex items-center justify-between px-4 border-b border-[var(--border-color)] bg-[var(--header-bg)]">
-                <Link href="/" className="flex items-center">
+                <Link href="/dashboard" className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
                     <img
                         src={theme === 'dark' ? '/dark_logo2.png' : '/white_logo2.png'}
                         alt="Motiveet"
-                        className="h-7 w-auto object-contain"
+                        className="h-6 w-auto object-contain"
                     />
                 </Link>
+
                 <div className="flex items-center gap-1">
                     <button
                         onClick={toggleTheme}
-                        className="p-2 rounded-md hover:bg-[var(--highlight-bg)] transition-colors text-[var(--foreground)] opacity-50 hover:opacity-100"
+                        className="p-1.5 rounded-md text-[var(--text-tertiary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
                         aria-label="테마 전환"
                     >
                         {theme === 'dark' ? (
@@ -184,134 +182,124 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                     </button>
                     <button
                         onClick={logout}
-                        className="px-3 py-1.5 text-xs text-[var(--foreground)] opacity-50 hover:opacity-100 hover:bg-[var(--highlight-bg)] rounded-md transition-all"
+                        className="h-8 px-3 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] rounded-md transition-colors"
                     >
                         로그아웃
                     </button>
                 </div>
             </header>
 
-            {/* ── Body: 3 columns ──────────────────────────────────────── */}
+            {/* Body */}
             <div className="flex-1 flex overflow-hidden">
-
-                {/* Left: Sidebar 240px */}
-                <div className="w-60 flex-shrink-0 overflow-hidden">
+                {/* Left: Sidebar */}
+                <aside className="w-60 flex-shrink-0 overflow-hidden">
                     <Sidebar
                         onMeetingSelect={handleMeetingSelect}
                         activeMeetingId={currentMeeting?.meetingId}
                         refreshTrigger={sidebarRefreshKey}
                     />
-                </div>
+                </aside>
 
                 {/* Center: Transcript */}
-                <div className="flex-1 flex flex-col overflow-hidden border-x border-[var(--border-color)]">
+                <main className="flex-1 flex flex-col overflow-hidden border-x border-[var(--border-color)] bg-[var(--card-bg)]">
                     {/* Meeting info bar */}
-                    <div className="flex-shrink-0 h-12 flex items-center px-6 gap-3 border-b border-[var(--border-color)] bg-[var(--card-bg)]">
+                    <div className="flex-shrink-0 h-12 flex items-center px-6 gap-3 border-b border-[var(--border-color)]">
                         {currentMeeting ? (
                             <>
                                 <h1 className="text-sm font-semibold text-[var(--foreground)] truncate">
                                     {currentMeeting.title}
                                 </h1>
                                 {isActive ? (
-                                    <span className="flex-shrink-0 flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-semibold border border-emerald-100 dark:border-emerald-900/30">
-                                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                    <span className="flex-shrink-0 inline-flex items-center gap-1.5 h-5 px-2 text-[10px] font-semibold rounded text-[var(--success)] bg-[var(--success)]/10">
+                                        <span className="w-1 h-1 rounded-full bg-[var(--success)] animate-pulse" />
                                         진행 중
                                     </span>
                                 ) : (
-                                    <span className="flex-shrink-0 px-2 py-0.5 text-[10px] font-medium text-[var(--foreground)] opacity-30 border border-[var(--border-color)] rounded-full">
+                                    <span className="flex-shrink-0 inline-flex items-center h-5 px-2 text-[10px] font-semibold rounded text-[var(--text-tertiary)] border border-[var(--border-color)]">
                                         종료됨
                                     </span>
                                 )}
                             </>
                         ) : (
-                            <span className="text-xs text-[var(--foreground)] opacity-30">
+                            <span className="text-xs text-[var(--text-tertiary)]">
                                 회의를 선택하거나 새로 시작하세요
                             </span>
                         )}
                     </div>
 
-                    {/* Transcript */}
                     <TranscriptView
                         segments={transcriptSegments}
                         isRecording={isThisRecording}
                         currentMeeting={currentMeeting}
                     />
-                </div>
+                </main>
 
-                {/* Right: Topics + Chat/Memo 320px */}
-                <div className="w-80 flex-shrink-0 flex flex-col overflow-hidden">
-                    {/* AI Topics section */}
-                    <div className="flex-shrink-0 border-b border-[var(--border-color)] bg-[var(--card-bg)]">
-                        <div className="px-4 py-3">
-                            <div className="flex items-center gap-2 mb-2.5">
-                                <span className="text-[10px] font-semibold text-[var(--foreground)] opacity-35 uppercase tracking-wider">
-                                    AI 추출 주제
+                {/* Right: Topics + Chat/Memo */}
+                <aside className="w-80 flex-shrink-0 flex flex-col overflow-hidden bg-[var(--card-bg)]">
+                    {/* AI Topics */}
+                    <div className="flex-shrink-0 border-b border-[var(--border-color)] px-4 py-3">
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
+                                AI 추출 주제
+                            </span>
+                            {suggestedSubjects.length > 0 && (
+                                <span className="text-[10px] font-semibold text-[var(--accent-primary)] tabular-nums">
+                                    {suggestedSubjects.length}
                                 </span>
-                                {suggestedSubjects.length > 0 && (
-                                    <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold rounded-full min-w-[18px] text-center">
-                                        {suggestedSubjects.length}
-                                    </span>
-                                )}
-                                {isActive && (
-                                    <span className="ml-auto flex items-center gap-1 text-[10px] text-[var(--foreground)] opacity-25">
-                                        <span className="w-1 h-1 rounded-full bg-indigo-400 animate-pulse" />
-                                        실시간
-                                    </span>
-                                )}
-                            </div>
-
-                            {suggestedSubjects.length === 0 ? (
-                                <p className="text-xs text-[var(--foreground)] opacity-25 py-1">
-                                    {isActive ? '대화를 분석하는 중...' : '추출된 주제가 없습니다'}
-                                </p>
-                            ) : (
-                                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                                    {suggestedSubjects.map((topic, i) => (
-                                        <button
-                                            key={i}
-                                            onClick={() => handleResearchRequest(topic)}
-                                            title={`"${topic}" 검색`}
-                                            className="px-2.5 py-1 text-[11px] bg-[var(--highlight-bg)] hover:bg-indigo-50 dark:hover:bg-indigo-950/20 text-[var(--foreground)] hover:text-indigo-600 dark:hover:text-indigo-300 rounded-full border border-[var(--border-color)] hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all active:scale-95"
-                                        >
-                                            {topic}
-                                        </button>
-                                    ))}
-                                </div>
+                            )}
+                            {isActive && (
+                                <span className="ml-auto flex items-center gap-1 text-[10px] text-[var(--text-tertiary)]">
+                                    <span className="w-1 h-1 rounded-full bg-[var(--accent-primary)] animate-pulse" />
+                                    실시간
+                                </span>
                             )}
                         </div>
+
+                        {suggestedSubjects.length === 0 ? (
+                            <p className="text-xs text-[var(--text-tertiary)] py-0.5">
+                                {isActive ? '대화를 분석하는 중...' : '추출된 주제가 없습니다'}
+                            </p>
+                        ) : (
+                            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                                {suggestedSubjects.map((topic, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => handleResearchRequest(topic)}
+                                        title={`"${topic}" 검색`}
+                                        disabled={!isActive}
+                                        className="h-6 px-2 text-[11px] bg-[var(--highlight-bg)] hover:bg-[var(--accent-primary)]/10 hover:text-[var(--accent-primary)] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--foreground)] rounded border border-[var(--border-color)] hover:border-[var(--accent-primary)]/30 transition-colors"
+                                    >
+                                        {topic}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Tab bar */}
-                    <div className="flex-shrink-0 flex border-b border-[var(--border-color)] bg-[var(--card-bg)]">
-                        <button
-                            onClick={() => setRightTab('chat')}
-                            className={`flex-1 py-2.5 text-xs font-semibold transition-all relative ${
-                                rightTab === 'chat'
-                                    ? 'text-indigo-600 dark:text-indigo-400'
-                                    : 'text-[var(--foreground)] opacity-35 hover:opacity-60'
-                            }`}
-                        >
-                            AI 채팅
-                            {rightTab === 'chat' && (
-                                <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-indigo-500 rounded-full" />
-                            )}
-                        </button>
-                        <button
-                            onClick={() => setRightTab('memo')}
-                            className={`flex-1 py-2.5 text-xs font-semibold transition-all relative ${
-                                rightTab === 'memo'
-                                    ? 'text-indigo-600 dark:text-indigo-400'
-                                    : 'text-[var(--foreground)] opacity-35 hover:opacity-60'
-                            }`}
-                        >
-                            메모
-                            {rightTab === 'memo' && (
-                                <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-indigo-500 rounded-full" />
-                            )}
-                        </button>
+                    {/* Tabs */}
+                    <div className="flex-shrink-0 flex border-b border-[var(--border-color)]">
+                        {[
+                            { id: 'chat', label: 'AI 채팅' },
+                            { id: 'memo', label: '메모' },
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setRightTab(tab.id as 'chat' | 'memo')}
+                                className={`flex-1 h-10 text-xs font-medium transition-colors relative ${
+                                    rightTab === tab.id
+                                        ? 'text-[var(--foreground)]'
+                                        : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                                }`}
+                            >
+                                {tab.label}
+                                {rightTab === tab.id && (
+                                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-primary)]" />
+                                )}
+                            </button>
+                        ))}
                     </div>
 
-                    {/* Chat or Memo */}
+                    {/* Tab content */}
                     <div className="flex-1 overflow-hidden">
                         {rightTab === 'chat' ? (
                             <ChatInterface
@@ -327,10 +315,10 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
                             />
                         )}
                     </div>
-                </div>
+                </aside>
             </div>
 
-            {/* ── Bottom: Recording controls ── 64px ───────────────────── */}
+            {/* Bottom controls */}
             <MeetingControls
                 isActive={isActive}
                 meetingId={currentMeeting?.meetingId || null}

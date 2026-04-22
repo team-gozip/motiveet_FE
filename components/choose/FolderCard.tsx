@@ -5,6 +5,7 @@ interface Folder {
     name: string;
     description: string | null;
     createdAt: string;
+    isOwner?: boolean;
 }
 
 interface FolderCardProps {
@@ -12,55 +13,51 @@ interface FolderCardProps {
     onClick: () => void;
 }
 
-const getColor = (name: string) => {
-    const colors = [
-        'from-indigo-500 to-indigo-600',
-        'from-violet-500 to-violet-600',
-        'from-blue-500 to-blue-600',
-        'from-emerald-500 to-emerald-600',
-        'from-amber-500 to-amber-600',
-        'from-rose-500 to-rose-600',
-        'from-cyan-500 to-cyan-600',
-        'from-fuchsia-500 to-fuchsia-600',
-    ];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
+const toKST = (ts: string) => {
+    const d = new Date(ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z');
+    return d.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: 'Asia/Seoul',
+    });
 };
 
 export default function FolderCard({ folder, onClick }: FolderCardProps) {
     const initial = folder.name.charAt(0).toUpperCase();
-    const colorClass = getColor(folder.name);
 
     return (
-        <div onClick={onClick} className="cursor-pointer group select-none">
-            {/* Thumbnail */}
-            <div className="relative w-full aspect-video rounded-xl overflow-hidden mb-3 border border-[var(--border-color)] shadow-sm group-hover:shadow-lg transition-all duration-300 group-hover:scale-[1.02]">
-                {/* Gradient background */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${colorClass} opacity-85 group-hover:opacity-95 transition-opacity`} />
-                {/* Initial letter */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-5xl font-black text-white/80 select-none group-hover:text-white/95 transition-colors">
-                        {initial}
-                    </span>
+        <button
+            onClick={onClick}
+            className="group text-left bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg p-5 hover:border-[var(--accent-primary)]/40 hover:shadow-sm transition-all"
+        >
+            <div className="flex items-start justify-between mb-4">
+                <div className="w-10 h-10 rounded-md bg-[var(--highlight-bg)] border border-[var(--border-color)] flex items-center justify-center text-[var(--foreground)] font-semibold text-base">
+                    {initial}
                 </div>
-                {/* Hover overlay */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors flex items-center justify-center">
-                    <span className="opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0 text-xs font-bold text-white bg-black/40 backdrop-blur-sm px-4 py-2 rounded-full">
-                        입장하기
+                {folder.isOwner && (
+                    <span className="text-[10px] font-medium text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-1.5 py-0.5 rounded">
+                        OWNER
                     </span>
-                </div>
+                )}
             </div>
 
-            {/* Name */}
-            <p className="text-sm font-semibold text-[var(--foreground)] line-clamp-2 px-0.5 group-hover:text-[var(--accent-primary)] transition-colors">
+            <h3 className="text-sm font-semibold text-[var(--foreground)] group-hover:text-[var(--accent-primary)] transition-colors truncate">
                 {folder.name}
+            </h3>
+            <p className="text-xs text-[var(--text-secondary)] mt-1 line-clamp-2 min-h-[2rem]">
+                {folder.description || '설명이 없습니다'}
             </p>
-            {folder.description && (
-                <p className="text-xs text-[var(--text-secondary)] mt-0.5 px-0.5 line-clamp-1">
-                    {folder.description}
-                </p>
-            )}
-        </div>
+
+            <div className="mt-4 pt-3 border-t border-[var(--border-color)] flex items-center justify-between text-[11px] text-[var(--text-tertiary)]">
+                <span>{toKST(folder.createdAt)}</span>
+                <span className="flex items-center gap-1 text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity">
+                    입장
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                </span>
+            </div>
+        </button>
     );
 }

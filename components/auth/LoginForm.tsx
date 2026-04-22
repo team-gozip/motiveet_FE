@@ -3,17 +3,12 @@
 import React, { useState, ChangeEvent, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from '../common/ThemeProvider';
-import Input from '../common/Input';
-import Button from '../common/Button';
 import { authApi, setTokens } from '@/lib/api';
 
 export default function LoginForm() {
     const { theme } = useTheme();
     const router = useRouter();
-    const [formData, setFormData] = useState({
-        username: '',
-        password: '',
-    });
+    const [formData, setFormData] = useState({ username: '', password: '' });
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -55,66 +50,74 @@ export default function LoginForm() {
     };
 
     return (
-        <div className="w-full max-w-md mx-auto">
-            <div className="bg-[var(--card-bg)] rounded-2xl shadow-xl p-10 border border-[var(--border-color)]">
-                <div className="flex justify-center mb-8">
-                    <img
-                        src={theme === 'dark' ? '/white_logo1.png' : '/dark_logo1.png'}
-                        alt="Motiveet Logo"
-                        className="h-20 w-auto object-contain transition-transform duration-300 hover:scale-105"
-                    />
-                </div>
-                <h2 className="text-2xl font-bold text-center mb-2 text-[var(--foreground)] tracking-tight">
-                    다시 오신 것을 환영해요
-                </h2>
-                <p className="text-sm text-[var(--text-secondary)] text-center mb-8">
+        <div className="w-full max-w-[360px]">
+            <div className="flex flex-col items-center mb-10">
+                <img
+                    src={theme === 'dark' ? '/white_logo1.png' : '/dark_logo1.png'}
+                    alt="Motiveet"
+                    className="h-12 w-auto object-contain mb-6 opacity-90"
+                />
+                <h1 className="text-[22px] font-semibold text-[var(--foreground)] tracking-tight">
+                    로그인
+                </h1>
+                <p className="text-sm text-[var(--text-secondary)] mt-1.5">
                     계정에 로그인하여 회의를 시작하세요
                 </p>
+            </div>
 
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <Input
-                        label="아이디"
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                    <label htmlFor="username" className="block text-xs font-medium text-[var(--text-secondary)]">
+                        아이디
+                    </label>
+                    <input
+                        id="username"
                         type="text"
                         name="username"
                         value={formData.username}
                         onChange={handleChange}
-                        placeholder="아이디를 입력하세요"
+                        placeholder="아이디"
                         autoComplete="username"
+                        className="w-full h-10 px-3 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-md text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/30 focus:border-[var(--accent-primary)]/50 transition-all"
                     />
+                </div>
 
-                    <Input
-                        label="비밀번호"
+                <div className="space-y-1.5">
+                    <label htmlFor="password" className="block text-xs font-medium text-[var(--text-secondary)]">
+                        비밀번호
+                    </label>
+                    <input
+                        id="password"
                         type="password"
                         name="password"
                         value={formData.password}
                         onChange={handleChange}
-                        placeholder="비밀번호를 입력하세요"
+                        placeholder="비밀번호"
                         autoComplete="current-password"
+                        className="w-full h-10 px-3 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-md text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/30 focus:border-[var(--accent-primary)]/50 transition-all"
                     />
+                </div>
 
-                    {error && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-                            <p className="text-sm text-[var(--danger)] text-center font-medium">{error}</p>
-                        </div>
-                    )}
+                {error && (
+                    <p className="text-xs text-[var(--danger)] pl-0.5">{error}</p>
+                )}
 
-                    <Button
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        className="w-full mt-4"
-                        disabled={isLoading}
-                    >
-                        {isLoading ? '로그인 중...' : '로그인'}
-                    </Button>
+                <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full h-10 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
+                >
+                    {isLoading ? '로그인 중...' : '로그인'}
+                </button>
+            </form>
 
-                    <p className="text-center text-sm text-[var(--text-secondary)]">
-                        계정이 없으신가요?{' '}
-                        <a href="/signup" className="text-[var(--accent-primary)] hover:underline font-semibold transition-colors">
-                            회원가입
-                        </a>
-                    </p>
-                </form>
+            <div className="mt-6 pt-6 border-t border-[var(--border-color)] text-center">
+                <p className="text-sm text-[var(--text-secondary)]">
+                    계정이 없으신가요?{' '}
+                    <a href="/signup" className="text-[var(--accent-primary)] hover:underline font-medium">
+                        회원가입
+                    </a>
+                </p>
             </div>
         </div>
     );

@@ -27,42 +27,49 @@ const toKST = (ts: string) => {
     }).replace(/\. /g, '.').replace(/\.$/, '');
 };
 
-// 배지는 "실제 회의 진행 여부"(activeMeetingId)와 "방 라이프사이클"(status)을 분리해서 판정.
-// status=ACTIVE여도 activeMeetingId가 null이면 회의는 끝난 것 → "대기 중"으로 표시.
 const deriveBadge = (room: Room) => {
     if (room.status === 'ENDED') {
-        return { text: '종료됨', color: 'text-[var(--text-tertiary)]', bg: 'bg-[var(--highlight-bg)]' };
+        return { text: '종료', color: 'text-[var(--text-tertiary)]', dot: 'bg-[var(--text-tertiary)]' };
     }
     if (room.activeMeetingId != null) {
-        return { text: '진행 중', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' };
+        return { text: '진행 중', color: 'text-[var(--success)]', dot: 'bg-[var(--success)] animate-pulse' };
     }
-    return { text: '대기 중', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/20' };
+    return { text: '대기', color: 'text-[var(--warning)]', dot: 'bg-[var(--warning)]' };
 };
 
 export default function MeetingRow({ room, onClick, selectMode = false, checked = false, onToggle }: MeetingRowProps) {
-    const { text: statusText, color: statusColor, bg: statusBg } = deriveBadge(room);
+    const { text: statusText, color: statusColor, dot: statusDot } = deriveBadge(room);
 
-    const handleClick = selectMode ? onToggle : onClick;
+    const isActive = room.activeMeetingId != null;
+    const isDisabledForSelect = selectMode && isActive;
+
+    const handleClick = selectMode
+        ? (isDisabledForSelect ? undefined : onToggle)
+        : onClick;
 
     return (
         <div
             onClick={handleClick}
-            className={`flex items-center px-4 py-3.5 rounded-xl border cursor-pointer transition-all group ${
-                selectMode && checked
-                    ? 'bg-red-50 dark:bg-red-950/20 border-red-400 dark:border-red-900/60'
-                    : 'bg-[var(--card-bg)] border-[var(--border-color)] hover:border-[var(--accent-primary)]/30 hover:shadow-sm'
+            title={isDisabledForSelect ? '진행 중인 회의는 삭제할 수 없습니다' : undefined}
+            className={`flex items-center gap-4 px-4 h-14 border-b border-[var(--border-color)] transition-colors group ${
+                isDisabledForSelect
+                    ? 'opacity-40 cursor-not-allowed'
+                    : selectMode && checked
+                        ? 'bg-red-50 dark:bg-red-950/20 cursor-pointer'
+                        : 'hover:bg-[var(--highlight-bg)] cursor-pointer'
             }`}
         >
-            {/* Checkbox (select mode) */}
             {selectMode && (
                 <div
-                    className={`flex-shrink-0 w-5 h-5 rounded border-2 mr-3 flex items-center justify-center transition-colors ${
-                        checked
-                            ? 'bg-red-500 border-red-500'
-                            : 'bg-transparent border-[var(--border-color)] group-hover:border-red-400'
+                    className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                        isDisabledForSelect
+                            ? 'bg-transparent border-[var(--border-color)]'
+                            : checked
+                                ? 'bg-[var(--danger)] border-[var(--danger)]'
+                                : 'bg-transparent border-[var(--border-color)] group-hover:border-[var(--danger)]'
                     }`}
                 >
-                    {checked && (
+                    {checked && !isDisabledForSelect && (
                         <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
@@ -70,42 +77,38 @@ export default function MeetingRow({ room, onClick, selectMode = false, checked 
                 </div>
             )}
 
-            {/* Type icon */}
-            <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center mr-3 ${
+            {/* Type tag */}
+            <span className={`flex-shrink-0 inline-flex items-center h-5 px-1.5 text-[10px] font-semibold rounded border uppercase tracking-wider ${
                 room.type === 'ONLINE'
-                    ? 'bg-indigo-100 dark:bg-indigo-900/30'
-                    : 'bg-emerald-100 dark:bg-emerald-900/30'
+                    ? 'text-[var(--accent-primary)] border-[var(--accent-primary)]/30 bg-[var(--accent-primary)]/5'
+                    : 'text-[var(--success)] border-[var(--success)]/30 bg-[var(--success)]/5'
             }`}>
-                {room.type === 'ONLINE' ? (
-                    <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-                    </svg>
-                ) : (
-                    <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                )}
-            </div>
+                {room.type === 'ONLINE' ? '온라인' : '오프라인'}
+            </span>
 
-            {/* Info */}
+            {/* Name */}
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-[var(--foreground)] truncate group-hover:text-[var(--accent-primary)] transition-colors">
+                <p className="text-sm font-medium text-[var(--foreground)] truncate group-hover:text-[var(--accent-primary)] transition-colors">
                     {room.name}
                 </p>
-                <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                    {toKST(room.createdAt)}
-                </p>
             </div>
 
-            {/* Status + arrow */}
-            <div className="flex items-center gap-3 flex-shrink-0">
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusColor} ${statusBg}`}>{statusText}</span>
-                {!selectMode && (
-                    <svg className="w-4 h-4 text-[var(--text-tertiary)] group-hover:text-[var(--accent-primary)] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                )}
+            {/* Status */}
+            <div className={`flex-shrink-0 flex items-center gap-1.5 text-xs font-medium ${statusColor}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${statusDot}`} />
+                {statusText}
             </div>
+
+            {/* Date */}
+            <span className="flex-shrink-0 text-xs text-[var(--text-tertiary)] tabular-nums w-20 text-right">
+                {toKST(room.createdAt)}
+            </span>
+
+            {!selectMode && (
+                <svg className="flex-shrink-0 w-4 h-4 text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+            )}
         </div>
     );
 }

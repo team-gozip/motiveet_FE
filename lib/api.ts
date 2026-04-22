@@ -403,7 +403,7 @@ export const folderApi = {
         if (cursor) params.append('cursor', String(cursor));
         params.append('limit', String(limit));
         return apiCall<{
-            items: Array<{ folderId: number; name: string; description: string | null; createdAt: string }>;
+            items: Array<{ folderId: number; name: string; description: string | null; createdAt: string; isOwner: boolean }>;
             nextCursor: number | null;
         }>(`/folders?${params}`);
     },
@@ -430,6 +430,18 @@ export const folderApi = {
         return apiCall<{
             members: Array<{ userId: number; username: string | null; name: string | null }>;
         }>(`/folders/${folderId}/members`);
+    },
+
+    delete: async (folderId: number) => {
+        return apiCall<{ success: boolean }>(`/folders/${folderId}`, {
+            method: 'DELETE',
+        });
+    },
+
+    leave: async (folderId: number) => {
+        return apiCall<{ success: boolean }>(`/folders/${folderId}/leave`, {
+            method: 'POST',
+        });
     },
 };
 

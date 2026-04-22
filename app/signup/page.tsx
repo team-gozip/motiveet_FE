@@ -3,9 +3,9 @@ import AuthHeader from '@/components/auth/AuthHeader';
 
 export default function SignupPage() {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-blue-50 dark:from-zinc-950 dark:to-zinc-900 flex flex-col transition-colors duration-300">
+        <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col">
             <AuthHeader />
-            <div className="flex-1 flex items-center justify-center p-4">
+            <div className="flex-1 flex items-center justify-center px-4 py-16">
                 <SignupForm />
             </div>
         </div>

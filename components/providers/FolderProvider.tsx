@@ -6,6 +6,7 @@ export interface Folder {
     folderId: number;
     name: string;
     description: string | null;
+    isOwner?: boolean;
 }
 
 interface FolderContextType {

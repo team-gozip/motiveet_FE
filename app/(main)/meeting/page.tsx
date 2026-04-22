@@ -32,13 +32,18 @@ export default function DedicatedMeetingPage() {
 
     if (error) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white">
-                <div className="text-center p-8 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-xl">
-                    <h1 className="text-2xl font-bold text-red-500 mb-4">오류 발생</h1>
-                    <p className="text-zinc-400 mb-6">{error}</p>
+            <div className="min-h-screen flex items-center justify-center bg-[var(--background)] p-4">
+                <div className="w-full max-w-sm bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 text-center">
+                    <div className="w-10 h-10 rounded-full bg-[var(--danger)]/10 flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-5 h-5 text-[var(--danger)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                        </svg>
+                    </div>
+                    <h1 className="text-sm font-semibold text-[var(--foreground)] mb-1">오류 발생</h1>
+                    <p className="text-xs text-[var(--text-secondary)] mb-5 leading-relaxed">{error}</p>
                     <button
                         onClick={() => router.push('/dashboard')}
-                        className="px-6 py-2 bg-[var(--accent-primary)] hover:brightness-110 rounded-lg transition-all"
+                        className="h-9 px-4 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] text-white rounded-md text-sm font-medium transition-colors"
                     >
                         대시보드로 돌아가기
                     </button>
@@ -49,10 +54,10 @@ export default function DedicatedMeetingPage() {
 
     if (!meetingId) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-                <div className="text-center">
-                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--accent-primary)] mb-4"></div>
-                    <p className="text-zinc-400">회의실로 입장 중...</p>
+            <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-6 h-6 border-2 border-[var(--border-color)] border-t-[var(--accent-primary)] rounded-full animate-spin" />
+                    <p className="text-xs text-[var(--text-tertiary)]">회의실로 입장 중...</p>
                 </div>
             </div>
         );

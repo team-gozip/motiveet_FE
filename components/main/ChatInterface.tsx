@@ -5,7 +5,6 @@ import { chatApi } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-// SQLite func.now()는 UTC를 반환하지만 Z가 없어서 JS가 로컬로 해석함
 const toKST = (timestamp: string) => {
     const ts = timestamp.endsWith('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z';
     return new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' });
@@ -32,7 +31,6 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-
     useEffect(() => {
         if (chatId) {
             loadChatHistory();
@@ -42,7 +40,7 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
     }, [chatId, sessionId]);
 
     useEffect(() => {
-        scrollToBottom();
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
     useImperativeHandle(ref, () => ({
@@ -51,23 +49,21 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
             setIsLoading(true);
             try {
                 const userResponse = await chatApi.requestResearch(chatId, topic, sessionId ?? null);
-                const newUserMessage: ChatMessage = {
+                setMessages(prev => [...prev, {
                     messageId: userResponse.messageId,
                     role: 'user',
                     text: userResponse.text,
                     timestamp: userResponse.timestamp,
-                };
-                setMessages(prev => [...prev, newUserMessage]);
+                }]);
 
                 const aiResponse = await chatApi.getAnswer(userResponse.messageId);
-                const aiMessage: ChatMessage = {
+                setMessages(prev => [...prev, {
                     messageId: aiResponse.messageId,
                     role: 'assistant',
                     text: aiResponse.text,
                     image: aiResponse.image,
                     timestamp: aiResponse.timestamp,
-                };
-                setMessages(prev => [...prev, aiMessage]);
+                }]);
             } catch (error) {
                 console.error('Failed research request:', error);
             } finally {
@@ -76,22 +72,12 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
         }
     }));
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
     const loadChatHistory = async () => {
         if (!chatId) return;
-
         try {
             const response = await chatApi.getHistory(chatId, undefined, 50, sessionId ?? null);
-            if (response && Array.isArray(response.messages)) {
-                setMessages(response.messages);
-            } else {
-                setMessages([]);
-            }
-        } catch (error) {
-            console.error('[ChatHistory] Failed to load chat history:', error);
+            setMessages(response?.messages && Array.isArray(response.messages) ? response.messages : []);
+        } catch {
             setMessages([]);
         }
     };
@@ -105,23 +91,21 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
 
         try {
             const userResponse = await chatApi.sendMessage(chatId, userMessage, undefined, sessionId ?? null);
-            const newUserMessage: ChatMessage = {
+            setMessages(prev => [...prev, {
                 messageId: userResponse.messageId,
                 role: 'user',
                 text: userMessage,
                 timestamp: userResponse.timestamp,
-            };
-            setMessages(prev => [...prev, newUserMessage]);
+            }]);
 
             const aiResponse = await chatApi.getAnswer(userResponse.messageId);
-            const aiMessage: ChatMessage = {
+            setMessages(prev => [...prev, {
                 messageId: aiResponse.messageId,
                 role: 'assistant',
                 text: aiResponse.text,
                 image: aiResponse.image,
                 timestamp: aiResponse.timestamp,
-            };
-            setMessages(prev => [...prev, aiMessage]);
+            }]);
         } catch (error) {
             console.error('Failed to send message:', error);
             setMessages(prev => [...prev, {
@@ -145,42 +129,37 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
     if (!chatId) {
         return (
             <div className="h-full flex items-center justify-center bg-[var(--card-bg)]">
-                <p className="text-[var(--text-tertiary)] text-sm">채팅을 불러오는 중...</p>
+                <p className="text-xs text-[var(--text-tertiary)]">채팅을 불러오는 중...</p>
             </div>
         );
     }
 
     return (
-        <div className="h-full flex flex-col bg-[var(--card-bg)] transition-colors duration-300">
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="h-full flex flex-col bg-[var(--card-bg)]">
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
                 {messages.length === 0 && !isLoading && (
                     <div className="h-full flex items-center justify-center">
-                        <div className="text-center">
-                            <div className="w-10 h-10 rounded-full bg-[var(--accent-primary)]/10 flex items-center justify-center mx-auto mb-3">
-                                <svg className="w-5 h-5 text-[var(--accent-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                </svg>
-                            </div>
-                            <p className="text-xs text-[var(--text-tertiary)]">
-                                {isMeetingActive ? 'AI에게 무엇이든 물어보세요' : '회의가 시작되면 AI 채팅을 사용할 수 있습니다'}
+                        <div className="text-center max-w-[220px]">
+                            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">
+                                {isMeetingActive
+                                    ? '회의 내용에 대해 궁금한 점을 물어보세요.'
+                                    : '회의가 시작되면 AI 채팅을 사용할 수 있습니다.'}
                             </p>
                         </div>
                     </div>
                 )}
+
                 {messages.map((message) => (
-                    <div
-                        key={message.messageId}
-                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
+                    <div key={message.messageId} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div
-                            className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl ${message.role === 'user'
-                                ? 'bg-[var(--accent-primary)] text-white rounded-br-md'
-                                : 'bg-[var(--highlight-bg)] text-[var(--foreground)] border border-[var(--border-color)] rounded-bl-md'
-                                }`}
+                            className={`max-w-[85%] px-3 py-2 rounded-lg text-sm leading-relaxed ${
+                                message.role === 'user'
+                                    ? 'bg-[var(--accent-primary)] text-white'
+                                    : 'bg-[var(--highlight-bg)] text-[var(--foreground)]'
+                            }`}
                         >
                             {message.text && (
-                                <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-1">
+                                <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:leading-relaxed">
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
                                         components={{
@@ -189,7 +168,7 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                                                     href={href}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="text-indigo-400 underline cursor-pointer hover:text-indigo-300"
+                                                    className={`underline ${message.role === 'user' ? 'text-white/90' : 'text-[var(--accent-primary)]'}`}
                                                 >
                                                     {children}
                                                 </a>
@@ -201,27 +180,22 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                                 </div>
                             )}
                             {message.image && (
-                                <img
-                                    src={message.image}
-                                    alt="Message attachment"
-                                    className="mt-2 rounded-lg max-w-full"
-                                />
+                                <img src={message.image} alt="" className="mt-2 rounded max-w-full" />
                             )}
-                            <p className={`text-[10px] mt-1.5 ${
-                                message.role === 'user' ? 'text-white/70' : 'text-[var(--text-tertiary)]'
-                            }`}>
+                            <p className={`text-[10px] mt-1 ${message.role === 'user' ? 'text-white/60' : 'text-[var(--text-tertiary)]'}`}>
                                 {toKST(message.timestamp)}
                             </p>
                         </div>
                     </div>
                 ))}
+
                 {isLoading && (
                     <div className="flex justify-start">
-                        <div className="bg-[var(--highlight-bg)] border border-[var(--border-color)] px-4 py-3 rounded-2xl rounded-bl-md">
-                            <div className="flex space-x-1.5">
-                                <div className="w-2 h-2 bg-[var(--accent-primary)]/40 rounded-full animate-bounce"></div>
-                                <div className="w-2 h-2 bg-[var(--accent-primary)]/40 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
-                                <div className="w-2 h-2 bg-[var(--accent-primary)]/40 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                        <div className="bg-[var(--highlight-bg)] px-3 py-2.5 rounded-lg">
+                            <div className="flex gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce" style={{ animationDelay: '0.15s' }} />
+                                <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce" style={{ animationDelay: '0.3s' }} />
                             </div>
                         </div>
                     </div>
@@ -229,24 +203,23 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
-            <div className="border-t border-[var(--border-color)] p-3 bg-[var(--background)]">
+            <div className="flex-shrink-0 border-t border-[var(--border-color)] p-3">
                 <div className="flex items-end gap-2">
                     <textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        placeholder={isMeetingActive ? '메시지를 입력하세요...' : '회의 시작 후 사용할 수 있습니다'}
-                        className="flex-1 px-3.5 py-2.5 bg-[var(--highlight-bg)] text-[var(--foreground)] border border-[var(--border-color)] rounded-xl resize-none focus:ring-2 focus:ring-[var(--accent-primary)]/20 focus:border-[var(--accent-primary)]/40 outline-none transition-all placeholder:text-[var(--text-tertiary)] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        placeholder={isMeetingActive ? '메시지 입력...' : '회의 시작 후 사용 가능'}
+                        className="flex-1 px-3 py-2 bg-[var(--background)] text-[var(--foreground)] border border-[var(--border-color)] rounded-md resize-none focus:ring-2 focus:ring-[var(--accent-primary)]/20 focus:border-[var(--accent-primary)]/40 outline-none transition-all placeholder:text-[var(--text-tertiary)] text-sm disabled:opacity-40"
                         rows={1}
                         disabled={isLoading || !isMeetingActive}
                     />
                     <button
                         onClick={handleSend}
                         disabled={!input.trim() || isLoading || !isMeetingActive}
-                        className="p-2.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl transition-all active:scale-95"
+                        className="flex-shrink-0 w-9 h-9 flex items-center justify-center bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-30 text-white rounded-md transition-colors"
                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                         </svg>
                     </button>
