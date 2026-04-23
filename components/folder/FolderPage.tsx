@@ -37,6 +37,32 @@ interface ConfirmModalProps {
     onClose: () => void;
 }
 
+const CALENDAR_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+const toKstDateKey = (date: Date) => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(date);
+
+    const year = parts.find(p => p.type === 'year')?.value ?? '0000';
+    const month = parts.find(p => p.type === 'month')?.value ?? '01';
+    const day = parts.find(p => p.type === 'day')?.value ?? '01';
+    return `${year}-${month}-${day}`;
+};
+
+const roomCreatedDateKey = (ts: string) => {
+    const d = new Date(ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z');
+    return toKstDateKey(d);
+};
+
+const formatDateKeyLabel = (dateKey: string) => {
+    const [y, m, d] = dateKey.split('-');
+    return `${y}.${m}.${d}`;
+};
+
 function ConfirmModal({ icon, title, description, confirmText, cancelText = '취소', confirmVariant, loading, errorMessage, onConfirm, onClose }: ConfirmModalProps) {
     const iconColor = icon === 'danger' ? 'text-[var(--danger)]' : 'text-[var(--warning)]';
     const confirmClass = confirmVariant === 'danger'
@@ -112,6 +138,11 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
     const [isFolderActing, setIsFolderActing] = useState(false);
     const [folderActionError, setFolderActionError] = useState<string | null>(null);
+    const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+    const [calendarMonth, setCalendarMonth] = useState(() => {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), 1);
+    });
 
     const isOwner = currentFolder?.isOwner === true;
 
@@ -257,14 +288,63 @@ export default function FolderPage({ folderId }: FolderPageProps) {
         }
     };
 
-    const filtered = rooms.filter(r => {
+    const filteredBase = rooms.filter(r => {
         const matchesTab = activeTab === 'ALL' || r.type === activeTab;
         const matchesSearch = r.name.toLowerCase().includes(search.toLowerCase());
         return matchesTab && matchesSearch;
     });
+    const filtered = selectedDateKey
+        ? filteredBase.filter(r => roomCreatedDateKey(r.createdAt) === selectedDateKey)
+        : filteredBase;
+
+    const roomCountByDate = filteredBase.reduce<Record<string, number>>((acc, room) => {
+        const key = roomCreatedDateKey(room.createdAt);
+        acc[key] = (acc[key] ?? 0) + 1;
+        return acc;
+    }, {});
+
+    const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const gridStart = new Date(monthStart);
+    gridStart.setDate(monthStart.getDate() - monthStart.getDay());
+
+    const todayKey = toKstDateKey(new Date());
+    const calendarDays = Array.from({ length: 42 }, (_, idx) => {
+        const day = new Date(gridStart);
+        day.setDate(gridStart.getDate() + idx);
+        const key = toKstDateKey(day);
+        return {
+            key,
+            date: day,
+            day: day.getDate(),
+            inMonth: day.getMonth() === calendarMonth.getMonth(),
+            count: roomCountByDate[key] ?? 0,
+            isToday: key === todayKey,
+        };
+    });
+
+    const calendarTitle = new Intl.DateTimeFormat('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+    }).format(calendarMonth);
+
+    const moveCalendarMonth = (delta: number) => {
+        setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+    };
+
+    const handleSelectCalendarDate = (dateKey: string, date: Date) => {
+        setSelectedDateKey(dateKey);
+        if (date.getMonth() !== calendarMonth.getMonth() || date.getFullYear() !== calendarMonth.getFullYear()) {
+            setCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+        }
+    };
+
+    const resetCalendarFilter = () => {
+        setSelectedDateKey(null);
+        const now = new Date();
+        setCalendarMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    };
 
     const onlineCount = rooms.filter(r => r.type === 'ONLINE').length;
-    const offlineCount = rooms.filter(r => r.type === 'OFFLINE').length;
     const activeCount = rooms.filter(r => r.activeMeetingId != null).length;
     const endedCount = rooms.filter(r => r.status === 'ENDED').length;
 
@@ -414,81 +494,162 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                     ))}
                 </div>
 
-                {/* Filter + search */}
-                <div className="flex items-center gap-2 mb-4">
-                    <div className="flex items-center bg-[var(--card-bg)] border border-[var(--border-color)] rounded-md p-0.5">
-                        {(['ALL', 'ONLINE', 'OFFLINE'] as const).map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`h-7 px-3 rounded text-xs font-medium transition-all ${
-                                    activeTab === tab
-                                        ? 'bg-[var(--highlight-bg)] text-[var(--foreground)]'
-                                        : 'text-[var(--text-secondary)] hover:text-[var(--foreground)]'
-                                }`}
-                            >
-                                {tab === 'ALL' ? '전체' : tab === 'ONLINE' ? '온라인' : '오프라인'}
-                            </button>
-                        ))}
-                    </div>
-                    <div className="relative flex-1">
-                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                        <input
-                            type="text"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="회의 이름으로 검색"
-                            className="w-full h-9 pl-9 pr-3 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-md text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/20 focus:border-[var(--accent-primary)]/40 transition-all"
-                        />
-                    </div>
-                </div>
-
-                {/* Room list */}
-                <div className="border border-[var(--border-color)] rounded-lg bg-[var(--card-bg)] overflow-hidden">
-                    {isLoading ? (
-                        <div>
-                            {[1, 2, 3, 4].map(i => (
-                                <div key={i} className="h-14 border-b last:border-b-0 border-[var(--border-color)] animate-pulse">
-                                    <div className="h-full flex items-center px-4">
-                                        <div className="w-14 h-4 bg-[var(--highlight-bg)] rounded" />
-                                        <div className="ml-4 flex-1 h-3 bg-[var(--highlight-bg)] rounded" />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : filtered.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-center">
-                            <div className="w-12 h-12 rounded-full bg-[var(--highlight-bg)] flex items-center justify-center mb-3">
-                                <svg className="w-5 h-5 text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                                </svg>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+                    <div className="min-w-0">
+                        {/* Filter + search */}
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="flex items-center bg-[var(--card-bg)] border border-[var(--border-color)] rounded-md p-0.5">
+                                {(['ALL', 'ONLINE', 'OFFLINE'] as const).map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`h-7 px-3 rounded text-xs font-medium transition-all ${
+                                            activeTab === tab
+                                                ? 'bg-[var(--highlight-bg)] text-[var(--foreground)]'
+                                                : 'text-[var(--text-secondary)] hover:text-[var(--foreground)]'
+                                        }`}
+                                    >
+                                        {tab === 'ALL' ? '전체' : tab === 'ONLINE' ? '온라인' : '오프라인'}
+                                    </button>
+                                ))}
                             </div>
-                            <p className="text-sm font-medium text-[var(--foreground)] mb-1">
-                                {search ? '검색 결과가 없습니다' : '아직 회의가 없습니다'}
-                            </p>
-                            {!search && (
-                                <p className="text-xs text-[var(--text-secondary)]">
-                                    위 &ldquo;새 회의&rdquo; 버튼으로 첫 회의를 시작하세요
-                                </p>
+                            <div className="relative flex-1">
+                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <input
+                                    type="text"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder="회의 이름으로 검색"
+                                    className="w-full h-9 pl-9 pr-3 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-md text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/20 focus:border-[var(--accent-primary)]/40 transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Room list */}
+                        <div className="border border-[var(--border-color)] rounded-lg bg-[var(--card-bg)] overflow-hidden">
+                            {isLoading ? (
+                                <div>
+                                    {[1, 2, 3, 4].map(i => (
+                                        <div key={i} className="h-14 border-b last:border-b-0 border-[var(--border-color)] animate-pulse">
+                                            <div className="h-full flex items-center px-4">
+                                                <div className="w-14 h-4 bg-[var(--highlight-bg)] rounded" />
+                                                <div className="ml-4 flex-1 h-3 bg-[var(--highlight-bg)] rounded" />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : filtered.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-20 text-center">
+                                    <div className="w-12 h-12 rounded-full bg-[var(--highlight-bg)] flex items-center justify-center mb-3">
+                                        <svg className="w-5 h-5 text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-sm font-medium text-[var(--foreground)] mb-1">
+                                        {selectedDateKey
+                                            ? '선택한 날짜에 생성된 회의가 없습니다'
+                                            : search
+                                                ? '검색 결과가 없습니다'
+                                                : '아직 회의가 없습니다'}
+                                    </p>
+                                    {!search && !selectedDateKey && (
+                                        <p className="text-xs text-[var(--text-secondary)]">
+                                            위 &ldquo;새 회의&rdquo; 버튼으로 첫 회의를 시작하세요
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <div>
+                                    {filtered.map((room, i) => (
+                                        <div key={room.roomId} className={i === filtered.length - 1 ? '[&>div]:border-b-0' : ''}>
+                                            <MeetingRow
+                                                room={room}
+                                                onClick={() => handleRoomClick(room)}
+                                                selectMode={deleteMode}
+                                                checked={selectedIds.has(room.roomId)}
+                                                onToggle={() => toggleSelected(room.roomId)}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
                             )}
                         </div>
-                    ) : (
-                        <div>
-                            {filtered.map((room, i) => (
-                                <div key={room.roomId} className={i === filtered.length - 1 ? '[&>div]:border-b-0' : ''}>
-                                    <MeetingRow
-                                        room={room}
-                                        onClick={() => handleRoomClick(room)}
-                                        selectMode={deleteMode}
-                                        checked={selectedIds.has(room.roomId)}
-                                        onToggle={() => toggleSelected(room.roomId)}
-                                    />
+                    </div>
+
+                    <aside className="border border-[var(--border-color)] rounded-lg bg-[var(--card-bg)] p-4 lg:sticky lg:top-[4.5rem]">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="min-w-0">
+                                <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">날짜 필터</p>
+                                <p className="text-sm font-medium text-[var(--foreground)] mt-0.5 truncate">{calendarTitle}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    onClick={() => moveCalendarMonth(-1)}
+                                    className="h-7 w-7 flex items-center justify-center rounded-md border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
+                                    aria-label="이전 달"
+                                >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => moveCalendarMonth(1)}
+                                    className="h-7 w-7 flex items-center justify-center rounded-md border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
+                                    aria-label="다음 달"
+                                >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={resetCalendarFilter}
+                                    className="h-7 px-2.5 rounded-md border border-[var(--border-color)] text-xs text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
+                                >
+                                    초기화
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-7 gap-1 mb-1">
+                            {CALENDAR_WEEKDAYS.map((d) => (
+                                <div key={d} className="h-7 flex items-center justify-center text-[11px] font-medium text-[var(--text-tertiary)]">
+                                    {d}
                                 </div>
                             ))}
                         </div>
-                    )}
+                        <div className="grid grid-cols-7 gap-1">
+                            {calendarDays.map(day => (
+                                <button
+                                    key={day.key}
+                                    onClick={() => handleSelectCalendarDate(day.key, day.date)}
+                                    className={`h-10 rounded-md border text-xs transition-colors ${
+                                        selectedDateKey === day.key
+                                            ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]'
+                                            : day.inMonth
+                                                ? 'border-transparent text-[var(--foreground)] hover:bg-[var(--highlight-bg)]'
+                                                : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--highlight-bg)]'
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-center gap-1">
+                                        <span className={`${day.isToday ? 'font-semibold underline decoration-[var(--accent-primary)] decoration-2 underline-offset-2' : ''}`}>
+                                            {day.day}
+                                        </span>
+                                        {day.count > 0 && (
+                                            <span className="text-[10px] text-[var(--accent-primary)] tabular-nums">({day.count})</span>
+                                        )}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="mt-2 text-xs text-[var(--text-secondary)]">
+                            {selectedDateKey
+                                ? `${formatDateKeyLabel(selectedDateKey)} 생성 회의만 표시 중 (${filtered.length}개)`
+                                : '날짜를 선택하면 해당 날짜에 생성된 회의만 표시됩니다.'}
+                        </div>
+                    </aside>
                 </div>
             </main>
 
