@@ -1109,7 +1109,7 @@ function EndedRoomView({
                     <div className="max-w-3xl mx-auto px-6 py-8">
                         <h2 className="text-lg font-bold mb-4">회의 메모</h2>
                         {note ? (
-                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none">
+                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none markdown-preview">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{note}</ReactMarkdown>
                             </div>
                         ) : (
@@ -1129,11 +1129,11 @@ function EndedRoomView({
                                 <p className="text-sm text-[var(--foreground)] opacity-40">요약을 불러오는 중...</p>
                             </div>
                         ) : roomSummary ? (
-                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none">
+                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none markdown-preview">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{roomSummary}</ReactMarkdown>
                             </div>
                         ) : isOnline && transcript ? (
-                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none">
+                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 prose prose-sm dark:prose-invert max-w-none markdown-preview">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{transcript}</ReactMarkdown>
                             </div>
                         ) : (

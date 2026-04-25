@@ -239,7 +239,7 @@ export default function SharedMemo({ roomId }: SharedMemoProps) {
                         }
                     />
                 ) : (
-                    <div className="p-6 prose prose-sm dark:prose-invert max-w-none text-[var(--foreground)]">
+                    <div className="p-6 prose prose-sm dark:prose-invert max-w-none markdown-preview text-[var(--foreground)]">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {content ||
                                 '*노트가 비어 있습니다. 클릭하여 작성을 시작하세요.*\n\n*이 노트는 방 참가자 전체와 공유됩니다.*'}

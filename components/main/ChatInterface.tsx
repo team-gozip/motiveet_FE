@@ -159,7 +159,7 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                             }`}
                         >
                             {message.text && (
-                                <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:leading-relaxed">
+                                <div className={`prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:leading-relaxed ${message.role === 'user' ? 'text-white prose-p:text-white prose-li:text-white prose-strong:text-white prose-headings:text-white' : 'markdown-preview'}`}>
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
                                         components={{
