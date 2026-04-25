@@ -7,6 +7,7 @@ interface Folder {
     folderId: number;
     name: string;
     description: string | null;
+    imageUrl: string | null;
     createdAt: string;
     isOwner: boolean;
 }
@@ -31,7 +32,7 @@ export default function CreateFolderModal({ onClose, onCreated }: CreateFolderMo
         setError('');
         try {
             const folder = await folderApi.create(name.trim(), description.trim() || undefined);
-            onCreated({ ...folder, isOwner: true });
+            onCreated({ ...folder, imageUrl: null, isOwner: true });
         } catch {
             setError('그룹 생성에 실패했습니다. 다시 시도해주세요.');
         } finally {

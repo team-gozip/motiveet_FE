@@ -607,7 +607,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                                     onClick={resetCalendarFilter}
                                     className="h-7 px-2.5 rounded-md border border-[var(--border-color)] text-xs text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
                                 >
-                                    초기화
+                                    전체 조회
                                 </button>
                             </div>
                         </div>

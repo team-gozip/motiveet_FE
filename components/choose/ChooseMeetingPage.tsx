@@ -9,11 +9,13 @@ import { useFolder } from '@/components/providers/FolderProvider';
 import { useTheme } from '@/components/common/ThemeProvider';
 import FolderCard from './FolderCard';
 import CreateFolderModal from './CreateFolderModal';
+import EditFolderModal from './EditFolderModal';
 
 interface Folder {
     folderId: number;
     name: string;
     description: string | null;
+    imageUrl: string | null;
     createdAt: string;
     isOwner: boolean;
 }
@@ -112,6 +114,7 @@ export default function ChooseMeetingPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showJoinCode, setShowJoinCode] = useState(false);
+    const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
     const [search, setSearch] = useState('');
 
     useEffect(() => {
@@ -142,6 +145,16 @@ export default function ChooseMeetingPage() {
     const handleFolderCreated = (folder: Folder) => {
         setFolders(prev => [folder, ...prev]);
         setShowCreateModal(false);
+    };
+
+    const handleFolderUpdated = (updated: Folder) => {
+        setFolders(prev => prev.map(f => f.folderId === updated.folderId ? updated : f));
+        setEditingFolder(null);
+    };
+
+    const handleFolderDeleted = (folderId: number) => {
+        setFolders(prev => prev.filter(f => f.folderId !== folderId));
+        setEditingFolder(null);
     };
 
     const filtered = search.trim()
@@ -265,6 +278,7 @@ export default function ChooseMeetingPage() {
                                 key={folder.folderId}
                                 folder={folder}
                                 onClick={() => handleFolderSelect(folder)}
+                                onEdit={folder.isOwner ? () => setEditingFolder(folder) : undefined}
                             />
                         ))}
                     </div>
@@ -285,6 +299,15 @@ export default function ChooseMeetingPage() {
                         setShowJoinCode(false);
                         loadFolders();
                     }}
+                />
+            )}
+
+            {editingFolder && (
+                <EditFolderModal
+                    folder={editingFolder}
+                    onClose={() => setEditingFolder(null)}
+                    onUpdated={handleFolderUpdated}
+                    onDeleted={handleFolderDeleted}
                 />
             )}
         </div>
