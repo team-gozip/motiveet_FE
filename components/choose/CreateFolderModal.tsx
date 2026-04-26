@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { folderApi } from '@/lib/api';
 
 interface Folder {
@@ -20,8 +20,30 @@ interface CreateFolderModalProps {
 export default function CreateFolderModal({ onClose, onCreated }: CreateFolderModalProps) {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
+    const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const initial = name.charAt(0).toUpperCase() || '?';
+
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+            setError('이미지 파일 크기는 2MB 이하여야 합니다.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            setImageUrl(ev.target?.result as string);
+            setError('');
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
 
     const handleSubmit = async () => {
         if (!name.trim()) {
@@ -31,8 +53,8 @@ export default function CreateFolderModal({ onClose, onCreated }: CreateFolderMo
         setIsLoading(true);
         setError('');
         try {
-            const folder = await folderApi.create(name.trim(), description.trim() || undefined);
-            onCreated({ ...folder, imageUrl: null, isOwner: true });
+            const folder = await folderApi.create(name.trim(), description.trim() || undefined, imageUrl);
+            onCreated({ ...folder, isOwner: true });
         } catch {
             setError('그룹 생성에 실패했습니다. 다시 시도해주세요.');
         } finally {
@@ -58,7 +80,48 @@ export default function CreateFolderModal({ onClose, onCreated }: CreateFolderMo
                     </button>
                 </div>
 
-                <div className="px-5 py-5 space-y-4">
+                <div className="px-5 py-5 space-y-5">
+                    {/* Image section */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium text-[var(--text-secondary)]">그룹 이미지</label>
+                        <div className="flex items-start gap-4">
+                            <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-[var(--border-color)] flex-shrink-0 bg-[var(--highlight-bg)]">
+                                {imageUrl ? (
+                                    <img src={imageUrl} alt="그룹 이미지" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-[var(--foreground)] font-bold text-xl">
+                                        {initial}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="h-7 px-3 text-xs bg-[var(--highlight-bg)] hover:bg-[var(--border-color)] border border-[var(--border-color)] text-[var(--foreground)] rounded-md transition-colors"
+                                >
+                                    이미지 삽입
+                                </button>
+                                {imageUrl && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setImageUrl(null)}
+                                        className="h-7 px-3 text-xs text-[var(--danger)] hover:bg-[var(--danger)]/10 border border-[var(--danger)]/30 rounded-md transition-colors"
+                                    >
+                                        이미지 삭제
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleImageSelect}
+                        />
+                    </div>
+
                     <div className="space-y-1.5">
                         <label className="text-xs font-medium text-[var(--text-secondary)]">
                             그룹 이름 <span className="text-[var(--danger)]">*</span>

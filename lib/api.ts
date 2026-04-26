@@ -408,10 +408,10 @@ export const folderApi = {
         }>(`/folders?${params}`);
     },
 
-    create: async (name: string, description?: string) => {
-        return apiCall<{ folderId: number; name: string; description: string | null; createdAt: string }>('/folders', {
+    create: async (name: string, description?: string, imageUrl?: string | null) => {
+        return apiCall<{ folderId: number; name: string; description: string | null; imageUrl: string | null; createdAt: string }>('/folders', {
             method: 'POST',
-            body: JSON.stringify({ name, description: description || null }),
+            body: JSON.stringify({ name, description: description || null, imageUrl: imageUrl ?? null }),
         });
     },
 

@@ -109,7 +109,7 @@ export default function EditFolderModal({ folder, onClose, onUpdated, onDeleted 
                     {/* Image section */}
                     <div className="space-y-2">
                         <label className="text-xs font-medium text-[var(--text-secondary)]">그룹 이미지</label>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-start gap-4">
                             {/* Preview */}
                             <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-[var(--border-color)] flex-shrink-0 bg-[var(--highlight-bg)]">
                                 {imageUrl ? (
@@ -138,13 +138,6 @@ export default function EditFolderModal({ folder, onClose, onUpdated, onDeleted 
                                         이미지 삭제
                                     </button>
                                 )}
-                                <button
-                                    type="button"
-                                    onClick={() => setImageUrl(null)}
-                                    className="h-7 px-3 text-xs text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] border border-[var(--border-color)] rounded-md transition-colors"
-                                >
-                                    기본 이미지 사용
-                                </button>
                             </div>
                         </div>
                         <input
