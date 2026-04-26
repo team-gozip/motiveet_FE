@@ -2,12 +2,10 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTheme } from '../common/ThemeProvider';
 import { authApi, setTokens } from '@/lib/api';
 import { validatePassword, passwordsMatch } from '@/lib/auth';
 
 export default function SignupForm() {
-    const { theme } = useTheme();
     const router = useRouter();
     const [formData, setFormData] = useState({
         username: '',
@@ -89,31 +87,21 @@ export default function SignupForm() {
     };
 
     const fields: { name: 'username' | 'password' | 'confirmPassword'; label: string; type: string; placeholder: string; autoComplete: string }[] = [
-        { name: 'username', label: '아이디', type: 'text', placeholder: '사용할 아이디', autoComplete: 'username' },
-        { name: 'password', label: '비밀번호', type: 'password', placeholder: '8자 이상, 특수문자 1개 이상', autoComplete: 'new-password' },
+        { name: 'username', label: '아이디', type: 'text', placeholder: '아이디 입력', autoComplete: 'username' },
+        { name: 'password', label: '비밀번호', type: 'password', placeholder: '비밀번호 입력', autoComplete: 'new-password' },
         { name: 'confirmPassword', label: '비밀번호 확인', type: 'password', placeholder: '비밀번호 다시 입력', autoComplete: 'new-password' },
     ];
 
     return (
         <div className="w-full max-w-[360px]">
-            <div className="flex flex-col items-center mb-10">
-                <img
-                    src={theme === 'dark' ? '/white_logo1.png' : '/dark_logo1.png'}
-                    alt="Motiveet"
-                    className="h-12 w-auto object-contain mb-6 opacity-90"
-                />
-                <h1 className="text-[22px] font-semibold text-[var(--foreground)] tracking-tight">
-                    회원가입
-                </h1>
-                <p className="text-sm text-[var(--text-secondary)] mt-1.5">
-                    계정을 만들고 AI 회의 어시스턴트를 시작하세요
-                </p>
-            </div>
+            <h1 className="text-2xl font-bold text-[var(--foreground)] mb-10">
+                회원가입
+            </h1>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
                 {fields.map(f => (
-                    <div key={f.name} className="space-y-1.5">
-                        <label htmlFor={f.name} className="block text-xs font-medium text-[var(--text-secondary)]">
+                    <div key={f.name}>
+                        <label htmlFor={f.name} className="block text-sm text-[var(--foreground)] mb-2">
                             {f.label}
                         </label>
                         <input
@@ -124,37 +112,37 @@ export default function SignupForm() {
                             onChange={handleChange}
                             placeholder={f.placeholder}
                             autoComplete={f.autoComplete}
-                            className={`w-full h-10 px-3 bg-[var(--card-bg)] border rounded-md text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/30 focus:border-[var(--accent-primary)]/50 transition-all ${
-                                errors[f.name] ? 'border-[var(--danger)]' : 'border-[var(--border-color)]'
+                            className={`w-full h-11 bg-transparent border-0 border-b text-[15px] text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:outline-none transition-colors ${
+                                errors[f.name]
+                                    ? 'border-[var(--danger)] focus:border-[var(--danger)]'
+                                    : 'border-[var(--border-color)] focus:border-[var(--accent-primary)]'
                             }`}
                         />
                         {errors[f.name] && (
-                            <p className="text-xs text-[var(--danger)] pl-0.5">{errors[f.name]}</p>
+                            <p className="text-xs text-[var(--danger)] mt-2">{errors[f.name]}</p>
                         )}
                     </div>
                 ))}
 
                 {errors.submit && (
-                    <p className="text-xs text-[var(--danger)] pl-0.5">{errors.submit}</p>
+                    <p className="text-xs text-[var(--danger)]">{errors.submit}</p>
                 )}
 
                 <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full h-10 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
+                    className="w-full h-11 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-md transition-colors mt-3"
                 >
                     {isLoading ? '처리 중...' : '가입하기'}
                 </button>
             </form>
 
-            <div className="mt-6 pt-6 border-t border-[var(--border-color)] text-center">
-                <p className="text-sm text-[var(--text-secondary)]">
-                    이미 계정이 있으신가요?{' '}
-                    <a href="/login" className="text-[var(--accent-primary)] hover:underline font-medium">
-                        로그인
-                    </a>
-                </p>
-            </div>
+            <p className="mt-8 text-sm text-[var(--text-secondary)]">
+                이미 계정이 있으신가요?{' '}
+                <a href="/login" className="text-[var(--accent-primary)] hover:underline">
+                    로그인
+                </a>
+            </p>
         </div>
     );
 }
