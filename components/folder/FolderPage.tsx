@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { roomApi, folderApi } from '@/lib/api';
+import { roomApi, folderApi, authApi } from '@/lib/api';
 import { useFolder } from '@/components/providers/FolderProvider';
 import { useTheme } from '@/components/common/ThemeProvider';
 import MeetingRow from './MeetingRow';
@@ -27,6 +27,7 @@ interface Room {
     name: string;
     type: 'ONLINE' | 'OFFLINE';
     status: 'WAITING' | 'ACTIVE' | 'ENDED';
+    hostId: number;
     activeMeetingId: number | null;
     createdAt: string;
 }
@@ -134,6 +135,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     const [inviteCode, setInviteCode] = useState<string | null>(null);
     const [codeCopied, setCodeCopied] = useState(false);
     const [rooms, setRooms] = useState<Room[]>([]);
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [accessDenied, setAccessDenied] = useState(false);
     const [activeTab, setActiveTab] = useState<'ONLINE' | 'OFFLINE' | 'ALL'>('ALL');
@@ -174,6 +176,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
 
     useEffect(() => {
         loadRooms();
+        authApi.me().then(me => setCurrentUserId(me.userId)).catch(() => {});
         folderApi.getInviteCode(folderId)
             .then(r => setInviteCode(r.inviteCode))
             .catch(() => {});
@@ -288,11 +291,13 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     };
 
     const handleRoomClick = async (room: Room) => {
+        // 종료된 방은 누구나 요약/메모 확인 가능
         if (room.status === 'ENDED') {
             router.push(`/room/${room.roomId}`);
             return;
         }
-        if (room.type === 'OFFLINE' && room.activeMeetingId != null) {
+        // 오프라인 방은 비종료 상태면 생성자(host)만 입장 가능
+        if (room.type === 'OFFLINE' && currentUserId !== room.hostId) {
             setShowBusyModal(true);
             return;
         }
@@ -736,8 +741,8 @@ export default function FolderPage({ folderId }: FolderPageProps) {
             {showBusyModal && (
                 <ConfirmModal
                     icon="warning"
-                    title="이미 사용 중인 회의입니다"
-                    description="오프라인 회의가 진행 중입니다. 회의가 종료된 후 다시 시도해주세요."
+                    title="입장할 수 없습니다"
+                    description="오프라인 회의는 생성자만 참여할 수 있습니다. 회의가 종료되면 AI 요약을 확인할 수 있습니다."
                     confirmText="확인"
                     cancelText="닫기"
                     confirmVariant="warning"

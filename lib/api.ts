@@ -486,6 +486,7 @@ export const roomApi = {
                 name: string;
                 type: 'ONLINE' | 'OFFLINE';
                 status: 'WAITING' | 'ACTIVE' | 'ENDED';
+                hostId: number;
                 activeMeetingId: number | null;
                 createdAt: string;
             }>;

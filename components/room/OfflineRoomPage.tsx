@@ -108,12 +108,6 @@ export default function OfflineRoomPage({
     const handleLeaveClick = async () => {
         if (isLeavingRoom) return;
         leaveRoom();
-        // 회의를 실제로 시작한 적 있는 호스트가 나갈 때만 방 종료.
-        // 시작 안 한 방은 WAITING으로 남겨 재사용 가능하게.
-        // (좀비 방이 되어도 BE stale sweep이 120초 후 정리)
-        if (isHost && hasStartedMeetingRef.current) {
-            try { await roomApi.end(roomId); } catch { /* ignore */ }
-        }
         handleLeave();
     };
 
@@ -332,9 +326,19 @@ export default function OfflineRoomPage({
             console.error('[OfflineRoom] setActiveMeeting(null) failed:', e);
         }
 
+        // 4단계: 방을 ENDED 상태로 전환 → 다른 멤버들도 종료 결과를 볼 수 있음.
+        try {
+            await roomApi.end(roomId);
+        } catch (e) {
+            console.error('[OfflineRoom] end room failed:', e);
+        }
+
         setIsEndingMeeting(false);
         setIsSummaryLoading(false);
         isEndingRef.current = false;
+
+        // ENDED 방 뷰로 이동 (메모 + 요약 + AI 채팅 기록)
+        router.push(`/room/${roomId}`);
     };
 
     const barMultipliers = [0.4, 0.6, 0.9, 1.2, 1.5, 1.2, 0.9, 0.6, 0.4];
