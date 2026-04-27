@@ -82,6 +82,21 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
 
     useEffect(() => {
         const meetingId = currentMeeting?.meetingId;
+        if (!meetingId) return;
+
+        const pollMeetingStatus = async () => {
+            try {
+                const meeting = await meetingApi.getById(meetingId);
+                setCurrentMeeting(meeting);
+            } catch { }
+        };
+
+        const id = setInterval(pollMeetingStatus, 5000);
+        return () => clearInterval(id);
+    }, [currentMeeting?.meetingId]);
+
+    useEffect(() => {
+        const meetingId = currentMeeting?.meetingId;
         if (!meetingId || currentMeeting?.endedAt) return;
 
         const poll = async () => {

@@ -364,6 +364,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
 
     // ── 기본 상태 ────────────────────────────────────────────────────
     const [isLeavingRoom, setIsLeavingRoom] = useState(false);
+    const [showMeetingEndedModal, setShowMeetingEndedModal] = useState(false);
 
     // ── 회의(meeting) 상태 ──────────────────────────────────────────
     const [meetingId, setMeetingId] = useState<number | null>(null);
@@ -522,9 +523,9 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
     }, [recordingTarget]);
 
     const handleRoomEnded = useCallback(() => {
-        // 호스트가 방을 종료함 → 참가자 자동 퇴장
-        router.push(`/folder/${folderId}`);
-    }, [router, folderId]);
+        // 호스트가 방을 종료함 → 참가자에게 모달 표시 후 자동 퇴장
+        setShowMeetingEndedModal(true);
+    }, []);
 
     const {
         localStream, peers, isMicOn, isCameraOn, isScreenSharing, isConnected, error, myUserId,
@@ -992,6 +993,36 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                     <span>나가기</span>
                 </ControlBtn>
             </div>
+
+            {/* 회의 종료 모달 (비호스트용) */}
+            {showMeetingEndedModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="bg-gray-800 border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+                        <div className="flex items-center justify-center mb-4">
+                            <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
+                                <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <h3 className="text-center text-white font-semibold mb-2">회의가 종료되었습니다</h3>
+                        <p className="text-center text-gray-400 text-sm mb-6">
+                            호스트가 회의를 종료했습니다. 잠시 후 자동으로 이동합니다.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowMeetingEndedModal(false);
+                                    router.push(`/folder/${folderId}`);
+                                }}
+                                className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors"
+                            >
+                                돌아가기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
