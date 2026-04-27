@@ -2,18 +2,14 @@ import { loggedFetch } from '../../_logger';
 
 const BE_URL = process.env.API_URL || 'https://localhost:8000';
 
-export async function GET(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params;
+export async function GET(request: Request) {
     const authHeader = request.headers.get('Authorization');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (authHeader) headers['Authorization'] = authHeader;
 
     try {
         const { response, data } = await loggedFetch(
-            `${BE_URL}/rooms/${id}`, 'GET',
+            `${BE_URL}/auth/me`, 'GET',
             { method: 'GET', headers }
         );
         return Response.json(data, { status: response.status });
@@ -25,34 +21,7 @@ export async function GET(
     }
 }
 
-export async function DELETE(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params;
-    const authHeader = request.headers.get('Authorization');
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (authHeader) headers['Authorization'] = authHeader;
-
-    try {
-        const { response, data } = await loggedFetch(
-            `${BE_URL}/rooms/${id}`, 'DELETE',
-            { method: 'DELETE', headers }
-        );
-        return Response.json(data, { status: response.status });
-    } catch {
-        return Response.json(
-            { error: { code: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' } },
-            { status: 500 }
-        );
-    }
-}
-
-export async function PATCH(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params;
+export async function PATCH(request: Request) {
     const authHeader = request.headers.get('Authorization');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (authHeader) headers['Authorization'] = authHeader;
@@ -61,7 +30,7 @@ export async function PATCH(
 
     try {
         const { response, data } = await loggedFetch(
-            `${BE_URL}/rooms/${id}`, 'PATCH',
+            `${BE_URL}/auth/me`, 'PATCH',
             { method: 'PATCH', headers, body }
         );
         return Response.json(data, { status: response.status });

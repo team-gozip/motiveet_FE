@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useWebRTC, RecordRequest } from '@/hooks/useWebRTC';
 import { useRoomHeartbeat } from '@/hooks/useRoomHeartbeat';
-import { roomApi, meetingApi, getAccessToken } from '@/lib/api';
+import { roomApi, meetingApi, folderApi, getAccessToken } from '@/lib/api';
 import OfflineRoomPage from './OfflineRoomPage';
 import ChatInterface from '@/components/main/ChatInterface';
 import SharedMemo from './SharedMemo';
@@ -315,7 +315,34 @@ function RecordPermissionModal({
 
 function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostId: number; folderId: number }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const initialMicOn = searchParams?.get('mic') !== '0';
+    const initialCameraOn = searchParams?.get('cam') !== '0';
     const isHost = getCurrentUserId() === hostId;
+
+    // ── 참가자 이름 매핑 (userId → 표시 이름) ───────────────────────
+    const [namesByUserId, setNamesByUserId] = useState<Map<number, string>>(new Map());
+    useEffect(() => {
+        let cancelled = false;
+        folderApi.getMembers(folderId)
+            .then(resp => {
+                if (cancelled) return;
+                const m = new Map<number, string>();
+                for (const u of resp.members) {
+                    m.set(u.userId, u.name || u.username || `사용자 ${u.userId}`);
+                }
+                setNamesByUserId(m);
+            })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [folderId]);
+
+    const labelOf = useCallback((peerId: string): string => {
+        const idPart = peerId.split('_')[0];
+        const uid = Number(idPart);
+        if (!Number.isFinite(uid)) return peerId;
+        return namesByUserId.get(uid) || peerId;
+    }, [namesByUserId]);
 
     // ── 기본 상태 ────────────────────────────────────────────────────
     const [isLeavingRoom, setIsLeavingRoom] = useState(false);
@@ -455,6 +482,8 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
         sendRecordRequest, sendRecordAccept, sendRecordReject, sendRecordStop,
     } = useWebRTC({
         roomId,
+        initialMicOn,
+        initialCameraOn,
         onLeave: handleLeave,
         onRoomEnded: handleRoomEnded,
         onRecordRequest: handleRecordRequest,
@@ -676,7 +705,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                 <VideoTile
                                     key={p.userId}
                                     stream={p.stream}
-                                    label={p.userId}
+                                    label={labelOf(p.userId)}
                                     isLocal={p.isLocal}
                                     isMuted={p.isLocal && !isMicOn}
                                     isBeingRecorded={recordingTarget === p.userId}
@@ -728,14 +757,14 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                                         }`}
                                                     >
                                                         <span className={`w-1.5 h-1.5 rounded-full ${recordingTarget === uid ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'}`} />
-                                                        {uid === myUserId ? '나' : uid.split('_')[0]}
+                                                        {uid === myUserId ? '나' : labelOf(uid)}
                                                         <span className="opacity-50">({userTranscripts.get(uid)?.length ?? 0})</span>
                                                     </button>
                                                 ))}
                                                 {recordingTarget && !recordedUsers.includes(recordingTarget) && (
                                                     <div className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-red-400 bg-red-500/10">
                                                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                                                        {recordingTarget.split('_')[0]} 인식 중...
+                                                        {labelOf(recordingTarget)} 인식 중...
                                                     </div>
                                                 )}
                                             </>

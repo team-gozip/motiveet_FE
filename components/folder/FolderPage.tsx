@@ -11,6 +11,17 @@ import MeetingTypeModal from './MeetingTypeModal';
 import MeetingCreateModal from './MeetingCreateModal';
 import NotificationBell from '@/components/common/NotificationBell';
 
+const LOBBY_VISITED_KEY = 'motiveet:lobby-visited';
+
+function hasVisitedLobby(roomId: number): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+        const raw = sessionStorage.getItem(LOBBY_VISITED_KEY);
+        const arr: number[] = raw ? JSON.parse(raw) : [];
+        return arr.includes(roomId);
+    } catch { return false; }
+}
+
 interface Room {
     roomId: number;
     name: string;
@@ -187,8 +198,13 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     };
 
     const handleRoomCreated = (roomId: number) => {
+        const type = pendingRoomType;
         setPendingRoomType(null);
-        router.push(`/room/${roomId}`);
+        if (type === 'ONLINE') {
+            router.push(`/room/${roomId}/lobby`);
+        } else {
+            router.push(`/room/${roomId}`);
+        }
     };
 
     const enterDeleteMode = () => {
@@ -282,7 +298,11 @@ export default function FolderPage({ folderId }: FolderPageProps) {
         }
         try {
             await roomApi.join(room.roomId);
-            router.push(`/room/${room.roomId}`);
+            if (room.type === 'ONLINE' && !hasVisitedLobby(room.roomId)) {
+                router.push(`/room/${room.roomId}/lobby`);
+            } else {
+                router.push(`/room/${room.roomId}`);
+            }
         } catch (e) {
             console.error('Failed to join room:', e);
         }

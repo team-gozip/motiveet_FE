@@ -42,6 +42,8 @@ export interface RecordRequest {
 
 interface UseWebRTCOptions {
     roomId: number;
+    initialMicOn?: boolean;
+    initialCameraOn?: boolean;
     onLeave?: () => void;
     onRoomEnded?: () => void;
     onRecordRequest?: (req: RecordRequest) => void;
@@ -50,11 +52,11 @@ interface UseWebRTCOptions {
     onRecordStop?: (from: string) => void;
 }
 
-export function useWebRTC({ roomId, onLeave, onRoomEnded, onRecordRequest, onRecordAccept, onRecordReject, onRecordStop }: UseWebRTCOptions) {
+export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true, onLeave, onRoomEnded, onRecordRequest, onRecordAccept, onRecordReject, onRecordStop }: UseWebRTCOptions) {
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [peers, setPeers] = useState<Map<string, PeerState>>(new Map());
-    const [isMicOn, setIsMicOn] = useState(true);
-    const [isCameraOn, setIsCameraOn] = useState(true);
+    const [isMicOn, setIsMicOn] = useState(initialMicOn);
+    const [isCameraOn, setIsCameraOn] = useState(initialCameraOn);
     const [isScreenSharing, setIsScreenSharing] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -265,6 +267,9 @@ export function useWebRTC({ roomId, onLeave, onRoomEnded, onRecordRequest, onRec
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+                // 로비에서 설정한 초기 mic/cam 상태 반영
+                stream.getAudioTracks().forEach(t => { t.enabled = initialMicOn; });
+                stream.getVideoTracks().forEach(t => { t.enabled = initialCameraOn; });
                 localStreamRef.current = stream;
                 cameraTrackRef.current = stream.getVideoTracks()[0] ?? null;
                 // 새 MediaStream 객체로 감싸서 React가 참조 변경을 감지하도록
@@ -273,6 +278,7 @@ export function useWebRTC({ roomId, onLeave, onRoomEnded, onRecordRequest, onRec
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+                    stream.getAudioTracks().forEach(t => { t.enabled = initialMicOn; });
                     localStreamRef.current = stream;
                     setLocalStream(new MediaStream(stream.getTracks()));
                     setIsCameraOn(false);

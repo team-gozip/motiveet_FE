@@ -131,6 +131,27 @@ export const authApi = {
         clearTokens();
         return result;
     },
+
+    me: async () => {
+        return apiCall<{
+            userId: number;
+            username: string | null;
+            email: string | null;
+            name: string | null;
+        }>('/auth/me');
+    },
+
+    updateMe: async (data: { name?: string }) => {
+        return apiCall<{
+            userId: number;
+            username: string | null;
+            email: string | null;
+            name: string | null;
+        }>('/auth/me', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    },
 };
 
 // ── Meeting API ─────────────────────────────────────────────────
@@ -483,6 +504,20 @@ export const roomApi = {
         }>('/rooms', {
             method: 'POST',
             body: JSON.stringify({ folderId, name, type }),
+        });
+    },
+
+    update: async (roomId: number, data: { name?: string }) => {
+        return apiCall<{
+            roomId: number;
+            folderId: number;
+            name: string;
+            type: 'ONLINE' | 'OFFLINE';
+            status: string;
+            createdAt: string;
+        }>(`/rooms/${roomId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
         });
     },
 
