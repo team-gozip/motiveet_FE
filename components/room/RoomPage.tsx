@@ -40,10 +40,12 @@ function VideoTile({
     const videoNodeRef = useRef<HTMLVideoElement | null>(null);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [hasVideo, setHasVideo] = useState(false);
+    const [isScreenShare, setIsScreenShare] = useState(false);
 
     useEffect(() => {
         if (!stream) {
             setHasVideo(false);
+            setIsScreenShare(false);
             return;
         }
 
@@ -64,6 +66,9 @@ function VideoTile({
                 }
             }
             setHasVideo(!!track && track.enabled && !track.muted && track.readyState === 'live');
+            const trackLabel = track?.label.toLowerCase() || '';
+            const isScreen = trackLabel.includes('screen') || trackLabel.includes('window') || trackLabel.includes('display');
+            setIsScreenShare(isScreen);
         };
 
         update();
@@ -214,7 +219,7 @@ function VideoTile({
                     ref={attachStream}
                     autoPlay
                     playsInline
-                    className={`w-full h-full object-cover ${cameraOff ? 'invisible' : ''} ${isLocal ? 'scale-x-[-1]' : ''}`}
+                    className={`w-full h-full object-cover ${cameraOff ? 'invisible' : ''} ${!isLocal && !isScreenShare ? 'scale-x-[-1]' : ''}`}
                 />
             )}
             {cameraOff && (

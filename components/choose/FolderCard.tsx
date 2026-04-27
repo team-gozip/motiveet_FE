@@ -30,25 +30,12 @@ export default function FolderCard({ folder, onClick, onEdit }: FolderCardProps)
 
     return (
         <div className="group relative bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg hover:border-[var(--accent-primary)]/40 hover:shadow-sm transition-all">
-            {/* Edit button — owner only */}
-            {folder.isOwner && onEdit && (
-                <button
-                    onClick={(e) => { e.stopPropagation(); onEdit(); }}
-                    className="absolute top-3 right-3 z-10 p-1.5 rounded-md text-[var(--text-tertiary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] opacity-0 group-hover:opacity-100 transition-all"
-                    title="그룹 수정"
-                >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                </button>
-            )}
-
             {/* Clickable area */}
             <button
                 onClick={onClick}
                 className="w-full text-left p-5"
             >
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start gap-3 mb-4">
                     <div className="w-10 h-10 rounded-md overflow-hidden bg-[var(--highlight-bg)] border border-[var(--border-color)] flex items-center justify-center text-[var(--foreground)] font-semibold text-base flex-shrink-0">
                         {folder.imageUrl ? (
                             <img src={folder.imageUrl} alt={folder.name} className="w-full h-full object-cover" />
@@ -57,10 +44,12 @@ export default function FolderCard({ folder, onClick, onEdit }: FolderCardProps)
                         )}
                     </div>
                     {folder.isOwner && (
-                        <span className="text-[10px] font-medium text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-1.5 py-0.5 rounded">
+                        <span className="mt-1 text-[10px] font-medium text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-1.5 py-0.5 rounded self-start">
                             OWNER
                         </span>
                     )}
+                    {/* spacer to prevent title area from overlapping three-dot button */}
+                    {folder.isOwner && onEdit && <span className="ml-auto w-7 flex-shrink-0" />}
                 </div>
 
                 <h3 className="text-sm font-semibold text-[var(--foreground)] group-hover:text-[var(--accent-primary)] transition-colors truncate">
@@ -80,6 +69,21 @@ export default function FolderCard({ folder, onClick, onEdit }: FolderCardProps)
                     </span>
                 </div>
             </button>
+
+            {/* Three-dot menu button — owner only */}
+            {folder.isOwner && onEdit && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                    className="absolute top-3.5 right-3.5 z-10 w-7 h-7 flex items-center justify-center rounded-full text-[var(--text-tertiary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] opacity-0 group-hover:opacity-100 transition-all"
+                    title="그룹 수정"
+                >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="2" />
+                        <circle cx="12" cy="12" r="2" />
+                        <circle cx="12" cy="19" r="2" />
+                    </svg>
+                </button>
+            )}
         </div>
     );
 }

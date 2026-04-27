@@ -168,7 +168,7 @@ export default function MainPage({ initialMeetingId }: MainPageProps) {
         <div className="h-screen flex flex-col bg-[var(--background)] text-[var(--foreground)]">
             {/* Header */}
             <header className="flex-shrink-0 h-12 flex items-center justify-between px-4 border-b border-[var(--border-color)] bg-[var(--header-bg)]">
-                <Link href="/dashboard" className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-colors">
+                <Link href="/choose" className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-colors">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>

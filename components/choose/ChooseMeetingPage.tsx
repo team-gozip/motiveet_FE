@@ -169,7 +169,7 @@ export default function ChooseMeetingPage() {
             {/* Header */}
             <header className="h-14 bg-[var(--header-bg)] border-b border-[var(--border-color)] sticky top-0 z-10">
                 <div className="max-w-6xl mx-auto h-full px-6 flex items-center justify-between">
-                    <Link href="/" className="flex items-center">
+                    <Link href="/choose" className="flex items-center">
                         <img
                             src={theme === 'dark' ? '/dark_logo2.png' : '/white_logo2.png'}
                             alt="Motiveet"

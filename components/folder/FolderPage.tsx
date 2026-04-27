@@ -390,7 +390,7 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                             </svg>
                         </Link>
-                        <Link href="/" className="flex items-center">
+                        <Link href="/choose" className="flex items-center">
                             <img
                                 src={theme === 'dark' ? '/dark_logo2.png' : '/white_logo2.png'}
                                 alt="Motiveet"
