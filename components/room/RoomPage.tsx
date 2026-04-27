@@ -39,22 +39,44 @@ function VideoTile({
 }) {
     const videoNodeRef = useRef<HTMLVideoElement | null>(null);
     const [isSpeaking, setIsSpeaking] = useState(false);
-    // 비디오가 실제로 재생 중인지 추적
-    const [isPlaying, setIsPlaying] = useState(false);
     const [hasVideo, setHasVideo] = useState(false);
 
     useEffect(() => {
-        const track = stream?.getVideoTracks()[0];
-        if (!track) { setHasVideo(false); return; }
-        const update = () => setHasVideo(track.enabled && !track.muted && track.readyState === 'live');
+        if (!stream) {
+            setHasVideo(false);
+            return;
+        }
+
+        let trackedVideo: MediaStreamTrack | null = null;
+        const update = () => {
+            const track = stream.getVideoTracks()[0] ?? null;
+            if (trackedVideo !== track) {
+                if (trackedVideo) {
+                    trackedVideo.removeEventListener('mute', update);
+                    trackedVideo.removeEventListener('unmute', update);
+                    trackedVideo.removeEventListener('ended', update);
+                }
+                trackedVideo = track;
+                if (trackedVideo) {
+                    trackedVideo.addEventListener('mute', update);
+                    trackedVideo.addEventListener('unmute', update);
+                    trackedVideo.addEventListener('ended', update);
+                }
+            }
+            setHasVideo(!!track && track.enabled && !track.muted && track.readyState === 'live');
+        };
+
         update();
-        track.addEventListener('mute', update);
-        track.addEventListener('unmute', update);
-        track.addEventListener('ended', update);
+        stream.addEventListener('addtrack', update);
+        stream.addEventListener('removetrack', update);
         return () => {
-            track.removeEventListener('mute', update);
-            track.removeEventListener('unmute', update);
-            track.removeEventListener('ended', update);
+            stream.removeEventListener('addtrack', update);
+            stream.removeEventListener('removetrack', update);
+            if (trackedVideo) {
+                trackedVideo.removeEventListener('mute', update);
+                trackedVideo.removeEventListener('unmute', update);
+                trackedVideo.removeEventListener('ended', update);
+            }
         };
     }, [stream]);
 
@@ -66,23 +88,19 @@ function VideoTile({
         if (stream) {
             node.srcObject = stream;
             node.play()
-                .then(() => setIsPlaying(true))
-                .catch(() => setIsPlaying(false));
+                .catch(() => {});
         } else {
             node.srcObject = null;
-            setIsPlaying(false);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [stream, isLocal]);
 
     // stream 트랙이 바뀌어도(enabled 토글 등) 다시 재생 시도
     useEffect(() => {
         const node = videoNodeRef.current;
-        if (!node || !stream) { setIsPlaying(false); return; }
+        if (!node || !stream) return;
         node.srcObject = stream;
         node.play()
-            .then(() => setIsPlaying(true))
-            .catch(() => setIsPlaying(false));
+            .catch(() => {});
 
         // 트랙이 추가/제거될 때 자동 재연결
         const handleTrackChange = () => {
@@ -351,6 +369,9 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
     const [meetingId, setMeetingId] = useState<number | null>(null);
     const [isStartingMeeting, setIsStartingMeeting] = useState(false);
     const [isEndingMeeting, setIsEndingMeeting] = useState(false);
+    // setState gap 사이 double-click 방어용 ref guard
+    const isEndingRef = useRef(false);
+    const isStartingRef = useRef(false);
     const isMeetingActive = !!meetingId;
 
     // ── 사이드 패널 ──────────────────────────────────────────────────
@@ -397,7 +418,8 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
 
     // ── 회의 시작 ────────────────────────────────────────────────────
     const handleStartMeeting = async () => {
-        if (isStartingMeeting) return;
+        if (isStartingRef.current) return;
+        isStartingRef.current = true;
         setIsStartingMeeting(true);
         try {
             // roomId 전달 → BE가 room.fallbackChatId/SessionId를 그대로 재사용 (회의 전 대화/메모 연속)
@@ -411,30 +433,58 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
         } catch (e) {
             console.error('[OnlineRoom] start meeting failed:', e);
         } finally {
+            isStartingRef.current = false;
             setIsStartingMeeting(false);
         }
     };
 
     // ── 회의 종료 → 방 종료 + 전원 퇴장 ─────────────────────────────
+    // 직렬화 이유:
+    //   1) meeting end가 먼저 끝나야 요약을 받을 수 있다 → setActiveMeeting에 summary 전달.
+    //   2) 직렬 실행이라 한 단계 실패해도 이후 단계의 race가 없음.
+    //   3) sendRoomEnded는 가장 먼저 → peer가 알림 받고 정상 퇴장할 시간 확보.
     const handleEndMeeting = async () => {
-        if (!meetingId || isEndingMeeting) return;
+        if (!meetingId || isEndingRef.current) return;
         if (!window.confirm('회의를 종료하시겠습니까?')) return;
+        const currentMeetingId = meetingId;
+        isEndingRef.current = true;
         setIsEndingMeeting(true);
+
+        // 자원 정리: 녹음 + 화면공유. 종료 후 Room.isSharing이 좀비로 남는 것 방지.
         if (recordingTarget) {
             sendRecordStop(recordingTarget);
             stopRecording();
         }
+        if (isScreenSharing) {
+            try { toggleScreenShare(); } catch { /* ignore */ }
+        }
+
+        // peer 알림 먼저 — WebRTC tear-down 전에 시그널이 도달할 시간 필요.
+        try { sendRoomEnded(); } catch { /* ignore */ }
+
+        // 직렬화: meeting end → summary 받음 → setActiveMeeting(summary 저장) → roomEnd.
+        let summary: string | null = null;
         try {
-            await Promise.all([
-                meetingApi.end(meetingId),
-                roomApi.setActiveMeeting(roomId, null, null),
-            ]);
+            const endResult = await meetingApi.end(currentMeetingId);
+            if (endResult?.success) summary = endResult.summary || null;
+        } catch (e) {
+            console.error('[OnlineRoom] meetingApi.end failed:', e);
+        }
+        try {
+            // summary를 함께 저장 → EndedRoomView/비호스트 polling에서 즉시 표시 가능.
+            await roomApi.setActiveMeeting(roomId, null, null, summary);
+        } catch (e) {
+            console.error('[OnlineRoom] setActiveMeeting(null) failed:', e);
+        }
+        try {
             await roomApi.end(roomId);
         } catch (e) {
-            console.error('[OnlineRoom] end meeting failed:', e);
+            console.error('[OnlineRoom] end room failed:', e);
         }
-        // 다른 참가자들에게 종료 알림 → 자신도 퇴장
-        sendRoomEnded();
+
+        // sendRoomEnded 시그널이 propagate할 시간 확보 (WebRTC signaling은 out-of-band).
+        await new Promise(r => setTimeout(r, 250));
+
         leaveRoom();
         router.push(`/folder/${folderId}`);
     };
@@ -966,11 +1016,21 @@ interface RoomInfo {
 
 export default function RoomPage({ roomId }: { roomId: number }) {
     const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const router = useRouter();
 
     useEffect(() => {
-        roomApi.getById(roomId)
-            .then(info => {
+        let cancelled = false;
+        const loadRoom = async () => {
+            try {
+                let info;
+                try {
+                    info = await roomApi.getById(roomId);
+                } catch {
+                    await roomApi.join(roomId);
+                    info = await roomApi.getById(roomId);
+                }
+                if (cancelled) return;
                 setRoomInfo({
                     type: info.type as 'ONLINE' | 'OFFLINE',
                     name: info.name,
@@ -986,16 +1046,26 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                     lastChatId: info.lastChatId ?? null,
                     lastSessionId: info.lastSessionId ?? null,
                 });
-            })
-            .catch(() => {
-                setRoomInfo({
-                    type: 'ONLINE', name: '', status: 'WAITING', hostId: 0, folderId: 0,
-                    controllerId: null, activeMeetingId: null, activeChatId: null,
-                    summary: null, note: null, transcript: null,
-                    lastChatId: null, lastSessionId: null,
-                });
-            });
+                setLoadError(null);
+            } catch (error) {
+                if (cancelled) return;
+                setLoadError(error instanceof Error ? error.message : '회의 정보를 불러오지 못했습니다.');
+            }
+        };
+        loadRoom();
+        return () => { cancelled = true; };
     }, [roomId]);
+
+    if (loadError) {
+        return (
+            <div className="h-screen bg-gray-950 flex items-center justify-center px-6">
+                <div className="text-center">
+                    <p className="text-red-400 text-sm mb-3">{loadError}</p>
+                    <button onClick={() => router.push('/choose')} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm">돌아가기</button>
+                </div>
+            </div>
+        );
+    }
 
     if (!roomInfo) {
         return (

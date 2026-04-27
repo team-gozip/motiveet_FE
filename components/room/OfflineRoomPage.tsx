@@ -51,6 +51,9 @@ export default function OfflineRoomPage({
     const [chatId, setChatId] = useState<number | null>(initialChatId);
     const [isStartingMeeting, setIsStartingMeeting] = useState(false);
     const [isEndingMeeting, setIsEndingMeeting] = useState(false);
+    // setState gap 사이 double-click 방어용 ref guard
+    const isEndingRef = useRef(false);
+    const isStartingRef = useRef(false);
     const [hostSummary, setHostSummary] = useState<string | null>(initialSummary);
     const [isSummaryLoading, setIsSummaryLoading] = useState(false);
     // 회의 종료 후 탭 뷰 (메모 | AI요약)
@@ -114,16 +117,25 @@ export default function OfflineRoomPage({
         handleLeave();
     };
 
-    // ── 마운트: 참가 + 전용 chatId 로드 + 기존 회의 복원 (host) ─
+    // ── 마운트: 참가 + 전용 chatId 로드 ─
+    // 새로고침 시 자동 녹음 시작은 하지 않음 — 사용자가 명시적으로 "녹음 재개" 버튼을 눌러야
+    // 마이크 권한 요청이 발생. 의도하지 않은 녹음 켜짐 방지.
     useEffect(() => {
         roomApi.join(roomId).catch(() => {});
-        // 전용 AI 채팅 chatId 로드 (항상 존재)
         meetingApi.getMe().then(m => setDedicatedChatId(m.chatId)).catch(() => {});
-        if (isHost && initialMeetingId && initialChatId) {
-            startGlobalMeeting(initialMeetingId, initialChatId).catch(() => {});
-        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // ── 녹음 재개 ─────────────────────────────────────────────────
+    // 회의가 진행 중인데 (다른 탭에서 시작했거나 새로고침 후) 녹음이 안 켜진 경우 사용.
+    const handleResumeRecording = useCallback(async () => {
+        if (!meetingId || !chatId || isThisRecording) return;
+        try {
+            await startGlobalMeeting(meetingId, chatId);
+        } catch (e) {
+            console.error('[OfflineRoom] resume recording failed:', e);
+        }
+    }, [meetingId, chatId, isThisRecording, startGlobalMeeting]);
 
     // ── 타이머 누적값 복원 (meetingId 바뀔 때) ──────────────────
     // 새로고침 등으로 재진입 시 이전에 쌓아둔 초를 이어받음.
@@ -172,12 +184,11 @@ export default function OfflineRoomPage({
     // heartbeat(30s 간격)이 살아있는 동안은 방이 유지되므로 새로고침 공백은 충분히 커버됨.
 
     // ── 비생성자: 5초 폴링으로 회의 종료 + 요약 감지 ─────────────
-    // 실패 탈출구:
-    //   1) room.status === 'ENDED' && !summary → 요약 생성 실패로 판정
-    //   2) 회의가 돌았던 적 있고 종료 후 90초 경과해도 요약 없으면 실패 판정
-    // (BE stale sweep이 120초 후 ENDED 전이시키므로 1번 조건이 대부분 먼저 걸림)
+    // 회복 가능: summaryFailed가 set되어도 폴링은 계속 → host가 재시도하거나
+    // 새 회의를 시작하면 위 분기에서 자동 회복.
+    // 타임아웃: 5분(60 × 5초). AI 요약이 길어질 수 있는 경우 대비.
     useEffect(() => {
-        if (isHost || nonHostSummary || summaryFailed) return;
+        if (isHost || nonHostSummary) return;
 
         const poll = setInterval(async () => {
             try {
@@ -188,23 +199,26 @@ export default function OfflineRoomPage({
                 if (room.summary) {
                     setNonHostSummary(room.summary);
                     setIsFetchingNonHostSummary(false);
+                    setSummaryFailed(false);
                     return;
                 }
 
                 if (room.activeMeetingId) {
-                    // 회의 진행 중
+                    // 회의 진행 중 → 회복: host가 재시도한 경우 failed flag 해제.
                     hadActiveMeetingRef.current = true;
                     pollCountRef.current = 0;
                     setIsFetchingNonHostSummary(false);
+                    setSummaryFailed(false);
                     return;
                 }
 
                 // activeMeetingId=null — 회의가 없거나 종료된 상태
                 pollCountRef.current += 1;
 
-                // 실패 조건: 방이 ENDED거나, 이전에 회의가 있었고 90초(18 × 5초) 경과
+                // 실패 표시 조건: 방이 ENDED거나, 이전에 회의가 있었고 5분(60 × 5초) 경과.
+                // 단 폴링은 멈추지 않음 — host가 새 회의 시작/요약 재생성하면 위에서 회복.
                 if (room.status === 'ENDED' ||
-                    (hadActiveMeetingRef.current && pollCountRef.current > 18)) {
+                    (hadActiveMeetingRef.current && pollCountRef.current > 60)) {
                     setIsFetchingNonHostSummary(false);
                     setSummaryFailed(true);
                     return;
@@ -216,7 +230,7 @@ export default function OfflineRoomPage({
         }, 5000);
 
         return () => clearInterval(poll);
-    }, [isHost, nonHostSummary, summaryFailed, roomId]);
+    }, [isHost, nonHostSummary, roomId]);
 
     // ── Host: 5초 폴링으로 activeParticipantCount 추적 ──────────
     // count === 0이면 방 버려진 상태 → 녹음/마이크 자동 정지
@@ -246,7 +260,8 @@ export default function OfflineRoomPage({
 
     // ── Host: 회의 시작 ───────────────────────────────────────────
     const handleStartMeeting = async () => {
-        if (isStartingMeeting) return;
+        if (isStartingRef.current) return;
+        isStartingRef.current = true;
         setIsStartingMeeting(true);
         try {
             // roomId 전달 → BE가 room.note를 meeting.memo 초기값으로 복사 + fallback chat/session 재사용
@@ -267,65 +282,59 @@ export default function OfflineRoomPage({
         } catch (e) {
             console.error('[OfflineRoom] start meeting failed:', e);
         } finally {
+            isStartingRef.current = false;
             setIsStartingMeeting(false);
         }
     };
 
     // ── Host: 회의 종료 ───────────────────────────────────────────
+    // 직렬화 이유: meetingApi.end가 먼저 끝나야 요약을 받아 setActiveMeeting의 summary 인자로
+    // 한 번에 저장 가능. 이전 코드는 두 호출을 병렬 발사하고 별도로 summary 저장을 또 호출 →
+    // race + 중복 호출 + 부분 실패 처리 복잡.
     const handleEndMeeting = async () => {
-        if (!meetingId || isEndingMeeting) return;
+        if (!meetingId || isEndingRef.current) return;
         if (!window.confirm('회의를 종료하시겠습니까?')) return;
 
         const currentMeetingId = meetingId;
+        isEndingRef.current = true;
         setIsEndingMeeting(true);
         setIsSummaryLoading(true);
 
         // 현재 room.note 를 가져와 meeting end body.memo 에 담아 요약에 반영.
-        // SharedMemo debounce(1s) 를 기다리진 않으므로 직전 키입력은 누락될 수 있음 — 허용 범위.
+        // SharedMemo debounce(1s)를 기다리진 않으므로 직전 키입력은 누락될 수 있음 — 허용 범위.
         let latestMemo: string | undefined = undefined;
         try {
             const roomLatest = await roomApi.getById(roomId);
             latestMemo = roomLatest.note ?? undefined;
         } catch { /* ignore — end with whatever BE has */ }
 
-        // allSettled로 둘 다 독립 실행 — 하나 실패해도 다른 하나는 완료시킴
-        const [endResult, clearResult] = await Promise.allSettled([
-            meetingApi.end(currentMeetingId, latestMemo),
-            roomApi.setActiveMeeting(roomId, null, null),
-        ]);
+        // 1단계: meeting 종료 + 요약 받기 (BE는 idempotent — 재시도 시 캐시 반환).
+        let summary: string | null = null;
+        try {
+            const endResult = await meetingApi.end(currentMeetingId, latestMemo);
+            if (endResult.success) summary = endResult.summary || null;
+        } catch (e) {
+            console.error('[OfflineRoom] meetingApi.end failed:', e);
+        }
 
-        // FE 상태는 항상 정리 — BE 일부 실패해도 회의는 사실상 종료된 것으로 처리
-        // (pagehide 비컨 + BE stale sweep이 좀비 상태를 복구)
+        // 2단계: FE 정리 (BE 부분 실패와 무관 — UI는 종료 상태로).
         endGlobalMeeting();
         try { localStorage.removeItem(`motiveet:meeting:${currentMeetingId}:elapsedSecs`); } catch { /* ignore */ }
         setMeetingId(null);
         setChatId(null); // effectiveChatId는 dedicatedChatId로 폴백
+        setHostSummary(summary);
 
-        let summary: string | null = null;
-        if (endResult.status === 'fulfilled' && endResult.value.success) {
-            summary = endResult.value.summary || null;
-            setHostSummary(summary);
-        } else {
-            console.error('[OfflineRoom] meetingApi.end failed:',
-                endResult.status === 'rejected' ? endResult.reason : endResult.value);
-            setHostSummary(null);
-        }
-
-        if (clearResult.status === 'rejected') {
-            console.error('[OfflineRoom] setActiveMeeting(null) failed:', clearResult.reason);
-        }
-
-        // 요약을 방에 저장 → 비생성자 폴링이 확인 가능
-        if (summary) {
-            try {
-                await roomApi.setActiveMeeting(roomId, null, null, summary);
-            } catch (e) {
-                console.error('[OfflineRoom] save summary to room failed:', e);
-            }
+        // 3단계: Room의 active 정리 + 요약 저장 (비호스트 폴링이 즉시 확인 가능).
+        // BE가 활성 meeting을 finalize하므로 _finalize_active_meeting의 가드와도 합쳐져 안전.
+        try {
+            await roomApi.setActiveMeeting(roomId, null, null, summary);
+        } catch (e) {
+            console.error('[OfflineRoom] setActiveMeeting(null) failed:', e);
         }
 
         setIsEndingMeeting(false);
         setIsSummaryLoading(false);
+        isEndingRef.current = false;
     };
 
     const barMultipliers = [0.4, 0.6, 0.9, 1.2, 1.5, 1.2, 0.9, 0.6, 0.4];
@@ -636,6 +645,17 @@ export default function OfflineRoomPage({
                 }`}>
                     {isThisRecording ? formatTime(elapsedSecs) : isActive ? '회의 중' : 'standby'}
                 </span>
+
+                {/* 녹음 재개 — 회의는 active인데 이 탭에서 녹음이 꺼져 있을 때 표시 */}
+                {isHost && isActive && !isThisRecording && !isRoomAbandoned && (
+                    <button
+                        onClick={handleResumeRecording}
+                        title="녹음 재개"
+                        className="px-2.5 py-1 rounded-md text-[10px] font-bold border border-red-200 dark:border-red-900/40 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+                    >
+                        녹음 재개
+                    </button>
+                )}
 
                 <div className="flex-1" />
 

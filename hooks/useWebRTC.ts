@@ -3,10 +3,23 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { getAccessToken } from '@/lib/api';
 
-const ICE_SERVERS = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-];
+function getIceServers(): RTCIceServer[] {
+    const servers: RTCIceServer[] = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+    ];
+
+    const turnUrls = process.env.NEXT_PUBLIC_TURN_URLS;
+    if (turnUrls) {
+        servers.push({
+            urls: turnUrls.split(',').map(url => url.trim()).filter(Boolean),
+            username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+            credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+        });
+    }
+
+    return servers;
+}
 
 function getMyUserId(): string {
     const token = getAccessToken();
@@ -66,6 +79,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
     const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
     const screenStreamRef = useRef<MediaStream | null>(null);
     const pcsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+    const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
     // ICE candidates that arrived before setRemoteDescription
     const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
     const myId = useRef<string>(getMyUserId());
@@ -82,9 +96,14 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
         }
     }, []);
 
-    const removePeer = useCallback((peerId: string) => {
-        pcsRef.current.get(peerId)?.close();
+    const removePeer = useCallback((peerId: string, expectedPc?: RTCPeerConnection) => {
+        const currentPc = pcsRef.current.get(peerId);
+        if (expectedPc && currentPc !== expectedPc) return;
+
+        currentPc?.close();
         pcsRef.current.delete(peerId);
+        remoteStreamsRef.current.get(peerId)?.getTracks().forEach(track => track.stop());
+        remoteStreamsRef.current.delete(peerId);
         pendingCandidatesRef.current.delete(peerId);
         makingOfferRef.current.delete(peerId);
         setPeers(prev => {
@@ -95,14 +114,24 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
     }, []);
 
     const createPC = useCallback((peerId: string): RTCPeerConnection => {
-        // Close any existing PC for this peer first
-        pcsRef.current.get(peerId)?.close();
+        const existingPc = pcsRef.current.get(peerId);
+        if (existingPc && existingPc.connectionState !== 'closed' && existingPc.connectionState !== 'failed') {
+            return existingPc;
+        }
+        if (existingPc) {
+            existingPc.onconnectionstatechange = null;
+            existingPc.close();
+            pcsRef.current.delete(peerId);
+        }
 
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        const pc = new RTCPeerConnection({ iceServers: getIceServers() });
 
-        localStreamRef.current?.getTracks().forEach(t => {
-            pc.addTrack(t, localStreamRef.current!);
-        });
+        const localStream = localStreamRef.current;
+        const localTracks = localStream?.getTracks() ?? [];
+        localTracks.forEach(t => pc.addTrack(t, localStream!));
+        if (!localTracks.some(t => t.kind === 'video')) {
+            pc.addTransceiver('video', { direction: 'sendrecv' });
+        }
 
         pc.onicecandidate = (e) => {
             if (e.candidate) {
@@ -111,17 +140,25 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
         };
 
         pc.ontrack = (e) => {
-            const stream = e.streams[0] ?? new MediaStream(e.track ? [e.track] : []);
+            const stream = remoteStreamsRef.current.get(peerId) ?? new MediaStream();
+            const incomingTracks = e.streams[0]?.getTracks() ?? (e.track ? [e.track] : []);
+            incomingTracks.forEach(track => {
+                if (!stream.getTracks().some(existing => existing.id === track.id)) {
+                    stream.addTrack(track);
+                }
+            });
+            remoteStreamsRef.current.set(peerId, stream);
             setPeers(prev => {
                 const next = new Map(prev);
-                next.set(peerId, { userId: peerId, stream });
+                next.set(peerId, { userId: peerId, stream: new MediaStream(stream.getTracks()) });
                 return next;
             });
         };
 
         pc.onconnectionstatechange = () => {
+            if (pcsRef.current.get(peerId) !== pc) return;
             if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-                removePeer(peerId);
+                removePeer(peerId, pc);
             }
         };
 
@@ -169,21 +206,22 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
             // Existing participant → new joiner enters
             const peerId = msg.id as string;
             if (!peerId || peerId === myId.current) return;
-            // If we already have a PC for this peer (they may have sent offer via participants),
-            // skip to avoid collision. The peer with the lexicographically smaller ID is the offerer.
-            if (pcsRef.current.has(peerId) && myId.current > peerId) return;
+            const existingPc = pcsRef.current.get(peerId);
+            const shouldOffer = !existingPc || existingPc.connectionState === 'failed' || existingPc.connectionState === 'closed';
             const pc = createPC(peerId);
-            await sendOffer(peerId, pc);
+            if (shouldOffer && pc.signalingState === 'stable') {
+                await sendOffer(peerId, pc);
+            }
 
         } else if (type === 'participants') {
             // We just joined — server tells us who's already in the room.
-            // We create offers to each existing participant.
+            // Existing participants will receive our join event and initiate offers.
+            // Creating offers from both sides causes glare and can make video one-way.
             const ids = msg.ids as string[];
             if (!Array.isArray(ids)) return;
             for (const peerId of ids) {
                 if (!peerId || peerId === myId.current) continue;
-                const pc = createPC(peerId);
-                await sendOffer(peerId, pc);
+                if (!pcsRef.current.has(peerId)) createPC(peerId);
             }
 
         } else if (type === 'offer') {
@@ -289,7 +327,9 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
 
             if (cancelled) return;
 
-            ws = new WebSocket(`${getWsBase()}/webrtc/ws/${roomId}`);
+            const token = getAccessToken();
+            const wsUrl = `${getWsBase()}/webrtc/ws/${roomId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+            ws = new WebSocket(wsUrl);
             wsRef.current = ws;
 
             ws.onopen = () => {
@@ -311,6 +351,8 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
             screenStreamRef.current?.getTracks().forEach(t => t.stop());
             pcsRef.current.forEach(pc => pc.close());
             pcsRef.current.clear();
+            remoteStreamsRef.current.forEach(stream => stream.getTracks().forEach(track => track.stop()));
+            remoteStreamsRef.current.clear();
             pendingCandidatesRef.current.clear();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -325,7 +367,10 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
 
     const replaceVideoTrack = useCallback(async (newTrack: MediaStreamTrack | null) => {
         const replacements = Array.from(pcsRef.current.values()).map(async (pc) => {
-            const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+            let sender = pc.getSenders().find(s => s.track?.kind === 'video');
+            if (!sender) {
+                sender = pc.getTransceivers().find(t => t.sender.track?.kind === 'video' || t.receiver.track?.kind === 'video')?.sender;
+            }
             if (sender) await sender.replaceTrack(newTrack);
         });
         await Promise.all(replacements);

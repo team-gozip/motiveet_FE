@@ -1,6 +1,6 @@
 import { loggedFetch } from '../../../_logger';
 
-const BE_URL = process.env.API_URL || 'https://localhost:8000';
+const BE_URL = process.env.API_URL || 'http://localhost:8000';
 
 function getAuthHeaders(request: Request): Record<string, string> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };

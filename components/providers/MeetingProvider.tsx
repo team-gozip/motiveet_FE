@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 import { meetingApi } from '@/lib/api';
 
+const CROSS_TAB_CHANNEL = 'motiveet:meeting';
+
 interface MeetingContextType {
   activeMeetingId: number | null;
   activeChatId: number | null;
@@ -30,11 +32,23 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const channelRef = useRef<BroadcastChannel | null>(null);
 
-  // Initial check for any active meeting on mount (optional, if we want to restore state)
-  // For now, we rely on user action or passed props, but checking API is safer.
+  // BE의 active meeting과 클라이언트 상태가 어긋났는지 확인.
+  // 다른 탭/디바이스에서 종료되거나 BE sweep으로 정리된 경우 로컬 녹음을 정지한다.
   const checkActiveMeeting = async () => {
-    // No-op: meetings must only be ended by pressing the "회의 종료" button.
+    const localId = activeMeetingIdRef.current;
+    if (!localId) return;
+    try {
+      const current = await meetingApi.getCurrent().catch(() => null);
+      const stillActive = current && current.meetingId === localId && !current.endedAt;
+      if (!stillActive) {
+        console.log('[MeetingProvider] BE no longer has this meeting active — cleaning up local state');
+        stopRecordingCleanup();
+        setActiveMeetingId(null);
+        setActiveChatId(null);
+      }
+    } catch { /* ignore — 네트워크 일시 단절은 무시 */ }
   };
 
   const stopRecordingCleanup = () => {
@@ -73,12 +87,36 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
   }, [activeMeetingId]);
 
   useEffect(() => {
+    // 다른 탭에서 회의가 종료되면 BroadcastChannel로 동기화 — 같은 meetingId면 로컬 녹음도 정지.
+    if (typeof BroadcastChannel !== 'undefined') {
+      const ch = new BroadcastChannel(CROSS_TAB_CHANNEL);
+      ch.onmessage = (e) => {
+        const data = e.data;
+        if (data?.type === 'end' && activeMeetingIdRef.current === data.meetingId) {
+          console.log('[MeetingProvider] received cross-tab end signal — cleaning up');
+          stopRecordingCleanup();
+          setActiveMeetingId(null);
+          setActiveChatId(null);
+        }
+      };
+      channelRef.current = ch;
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') checkActiveMeeting();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     // checkActiveMeeting is async — setState calls inside happen after await, not synchronously
     // eslint-disable-next-line react-hooks/set-state-in-effect
     checkActiveMeeting();
     return () => {
       stopRecordingCleanup();
+      try { channelRef.current?.close(); } catch { /* ignore */ }
+      channelRef.current = null;
+      document.removeEventListener('visibilitychange', onVisibility);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startRecording = async (meetingId: number) => {
@@ -166,9 +204,14 @@ export function MeetingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const endGlobalMeeting = () => {
+    const id = activeMeetingIdRef.current;
     stopRecordingCleanup();
     setActiveMeetingId(null);
     setActiveChatId(null);
+    // 다른 탭에 회의 종료 알림 → 그 탭들도 녹음 정지.
+    if (id != null) {
+      try { channelRef.current?.postMessage({ type: 'end', meetingId: id }); } catch { /* ignore */ }
+    }
   };
 
   return (

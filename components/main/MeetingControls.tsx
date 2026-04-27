@@ -28,6 +28,7 @@ export default function MeetingControls({
 }: MeetingControlsProps) {
     const { startGlobalMeeting, endGlobalMeeting, volume, activeMeetingId, isRecording } = useMeeting();
     const [isLoading, setIsLoading] = useState(false);
+    const isLoadingRef = useRef(false); // setState gap 사이 double-trigger 방지 (Enter spam, 더블클릭)
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [meetingTitle, setMeetingTitle] = useState('새로운 회의');
     const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -62,6 +63,8 @@ export default function MeetingControls({
     }, [isThisRecording, elapsedStorageKey]);
 
     const handleStart = async () => {
+        if (isLoadingRef.current) return;
+        isLoadingRef.current = true;
         setIsModalOpen(false);
         const title = meetingTitle.trim() || '새로운 회의';
         setIsLoading(true);
@@ -76,12 +79,15 @@ export default function MeetingControls({
         } catch (e) {
             console.error('Failed to start meeting:', e);
         } finally {
+            isLoadingRef.current = false;
             setIsLoading(false);
         }
     };
 
     const handleEnd = async () => {
-        if (!meetingId || !window.confirm('회의를 종료하시겠습니까?')) return;
+        if (!meetingId || isLoadingRef.current) return;
+        if (!window.confirm('회의를 종료하시겠습니까?')) return;
+        isLoadingRef.current = true;
         setIsLoading(true);
         try {
             const resp = await meetingApi.end(meetingId, memo);
@@ -93,6 +99,7 @@ export default function MeetingControls({
         } catch (e) {
             console.error('Failed to end meeting:', e);
         } finally {
+            isLoadingRef.current = false;
             setIsLoading(false);
         }
     };

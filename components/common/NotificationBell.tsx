@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { notificationApi } from '@/lib/api';
+import { notificationApi, roomApi } from '@/lib/api';
 
 interface Notification {
     id: number;
@@ -23,9 +23,10 @@ function Toast({ notif, onClose }: { notif: Notification; onClose: () => void })
         return () => clearTimeout(timer);
     }, [onClose]);
 
-    const handleClick = () => {
+    const handleClick = async () => {
         if (notif.roomId) {
-            notificationApi.markRead(notif.id).catch(() => {});
+            await notificationApi.markRead(notif.id).catch(() => {});
+            await roomApi.join(notif.roomId).catch(() => {});
             router.push(`/room/${notif.roomId}`);
         }
         onClose();
@@ -61,6 +62,7 @@ export default function NotificationBell() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
     const [toasts, setToasts] = useState<Notification[]>([]);
+    const [now, setNow] = useState(0);
     const prevIdsRef = useRef<Set<number>>(new Set());
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -89,6 +91,13 @@ export default function NotificationBell() {
         return () => clearInterval(interval);
     }, [fetchNotifications]);
 
+    useEffect(() => {
+        const updateNow = () => setNow(Date.now());
+        updateNow();
+        const interval = setInterval(updateNow, 60000);
+        return () => clearInterval(interval);
+    }, []);
+
     // 외부 클릭으로 닫기
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -105,7 +114,10 @@ export default function NotificationBell() {
         setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
         setUnreadCount(prev => Math.max(0, prev - 1));
         setIsOpen(false);
-        if (notif.roomId) router.push(`/room/${notif.roomId}`);
+        if (notif.roomId) {
+            await roomApi.join(notif.roomId).catch(() => {});
+            router.push(`/room/${notif.roomId}`);
+        }
     };
 
     const handleMarkAllRead = async () => {
@@ -119,7 +131,8 @@ export default function NotificationBell() {
     };
 
     const timeAgo = (dateStr: string) => {
-        const diff = Date.now() - new Date(dateStr).getTime();
+        if (!now) return '';
+        const diff = now - new Date(dateStr).getTime();
         const mins = Math.floor(diff / 60000);
         if (mins < 1) return '방금';
         if (mins < 60) return `${mins}분 전`;
