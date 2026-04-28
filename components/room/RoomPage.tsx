@@ -1088,42 +1088,39 @@ export default function RoomPage({ roomId }: { roomId: number }) {
     const [loadError, setLoadError] = useState<string | null>(null);
     const router = useRouter();
 
-    useEffect(() => {
-        let cancelled = false;
-        const loadRoom = async () => {
+    const loadRoom = useCallback(async () => {
+        try {
+            let info;
             try {
-                let info;
-                try {
-                    info = await roomApi.getById(roomId);
-                } catch {
-                    await roomApi.join(roomId);
-                    info = await roomApi.getById(roomId);
-                }
-                if (cancelled) return;
-                setRoomInfo({
-                    type: info.type as 'ONLINE' | 'OFFLINE',
-                    name: info.name,
-                    status: info.status,
-                    hostId: info.hostId,
-                    folderId: info.folderId,
-                    controllerId: info.controllerId,
-                    activeMeetingId: info.activeMeetingId ?? null,
-                    activeChatId: info.activeChatId ?? null,
-                    summary: info.summary ?? null,
-                    note: info.note ?? null,
-                    transcript: info.transcript ?? null,
-                    lastChatId: info.lastChatId ?? null,
-                    lastSessionId: info.lastSessionId ?? null,
-                });
-                setLoadError(null);
-            } catch (error) {
-                if (cancelled) return;
-                setLoadError(error instanceof Error ? error.message : '회의 정보를 불러오지 못했습니다.');
+                info = await roomApi.getById(roomId);
+            } catch {
+                await roomApi.join(roomId);
+                info = await roomApi.getById(roomId);
             }
-        };
-        loadRoom();
-        return () => { cancelled = true; };
+            setRoomInfo({
+                type: info.type as 'ONLINE' | 'OFFLINE',
+                name: info.name,
+                status: info.status,
+                hostId: info.hostId,
+                folderId: info.folderId,
+                controllerId: info.controllerId,
+                activeMeetingId: info.activeMeetingId ?? null,
+                activeChatId: info.activeChatId ?? null,
+                summary: info.summary ?? null,
+                note: info.note ?? null,
+                transcript: info.transcript ?? null,
+                lastChatId: info.lastChatId ?? null,
+                lastSessionId: info.lastSessionId ?? null,
+            });
+            setLoadError(null);
+        } catch (error) {
+            setLoadError(error instanceof Error ? error.message : '회의 정보를 불러오지 못했습니다.');
+        }
     }, [roomId]);
+
+    useEffect(() => {
+        loadRoom();
+    }, [loadRoom]);
 
     if (loadError) {
         return (
@@ -1172,6 +1169,7 @@ export default function RoomPage({ roomId }: { roomId: number }) {
                 initialMeetingId={roomInfo.activeMeetingId}
                 initialChatId={roomInfo.activeChatId}
                 initialSummary={roomInfo.summary}
+                onMeetingEnded={loadRoom}
             />
         );
     }

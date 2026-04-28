@@ -47,14 +47,23 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
         handleResearch: async (topic: string) => {
             if (!chatId || isLoading || !isMeetingActive) return;
             setIsLoading(true);
+
+            // 낙관적 추가 — 서버 응답 전에 사용자 메시지를 즉시 표시
+            const tempId = -Date.now();
+            setMessages(prev => [...prev, {
+                messageId: tempId,
+                role: 'user',
+                text: topic,
+                timestamp: new Date().toISOString(),
+            }]);
+
             try {
                 const userResponse = await chatApi.requestResearch(chatId, topic, sessionId ?? null);
-                setMessages(prev => [...prev, {
-                    messageId: userResponse.messageId,
-                    role: 'user',
-                    text: userResponse.text,
-                    timestamp: userResponse.timestamp,
-                }]);
+                setMessages(prev => prev.map(m =>
+                    m.messageId === tempId
+                        ? { ...m, messageId: userResponse.messageId, text: userResponse.text, timestamp: userResponse.timestamp }
+                        : m
+                ));
 
                 const aiResponse = await chatApi.getAnswer(userResponse.messageId);
                 setMessages(prev => [...prev, {
@@ -66,6 +75,7 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
                 }]);
             } catch (error) {
                 console.error('Failed research request:', error);
+                setMessages(prev => prev.filter(m => m.messageId !== tempId));
             } finally {
                 setIsLoading(false);
             }
@@ -89,14 +99,22 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
         setInput('');
         setIsLoading(true);
 
+        // 낙관적 추가 — 서버 응답 전에 사용자 메시지를 즉시 표시
+        const tempId = -Date.now();
+        setMessages(prev => [...prev, {
+            messageId: tempId,
+            role: 'user',
+            text: userMessage,
+            timestamp: new Date().toISOString(),
+        }]);
+
         try {
             const userResponse = await chatApi.sendMessage(chatId, userMessage, undefined, sessionId ?? null);
-            setMessages(prev => [...prev, {
-                messageId: userResponse.messageId,
-                role: 'user',
-                text: userMessage,
-                timestamp: userResponse.timestamp,
-            }]);
+            setMessages(prev => prev.map(m =>
+                m.messageId === tempId
+                    ? { ...m, messageId: userResponse.messageId, timestamp: userResponse.timestamp }
+                    : m
+            ));
 
             const aiResponse = await chatApi.getAnswer(userResponse.messageId);
             setMessages(prev => [...prev, {
@@ -108,12 +126,15 @@ const ChatInterface = forwardRef(function ChatInterface(props: ChatInterfaceProp
             }]);
         } catch (error) {
             console.error('Failed to send message:', error);
-            setMessages(prev => [...prev, {
-                messageId: Date.now(),
-                role: 'assistant',
-                text: '죄송합니다. 메시지 전송에 실패했습니다.',
-                timestamp: new Date().toISOString(),
-            }]);
+            setMessages(prev => [
+                ...prev.filter(m => m.messageId !== tempId),
+                {
+                    messageId: Date.now(),
+                    role: 'assistant',
+                    text: '죄송합니다. 메시지 전송에 실패했습니다.',
+                    timestamp: new Date().toISOString(),
+                },
+            ]);
         } finally {
             setIsLoading(false);
         }

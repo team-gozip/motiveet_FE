@@ -26,6 +26,7 @@ interface OfflineRoomPageProps {
     initialMeetingId: number | null;
     initialChatId: number | null;
     initialSummary: string | null;
+    onMeetingEnded?: () => void | Promise<void>;
 }
 
 export default function OfflineRoomPage({
@@ -36,6 +37,7 @@ export default function OfflineRoomPage({
     initialMeetingId,
     initialChatId,
     initialSummary,
+    onMeetingEnded,
 }: OfflineRoomPageProps) {
     const router = useRouter();
     const [isLeavingRoom, setIsLeavingRoom] = useState(false);
@@ -337,8 +339,13 @@ export default function OfflineRoomPage({
         setIsSummaryLoading(false);
         isEndingRef.current = false;
 
-        // ENDED 방 뷰로 이동 (메모 + 요약 + AI 채팅 기록)
-        router.push(`/room/${roomId}`);
+        // 부모(RoomPage)가 roomInfo를 재조회 → status='ENDED' 감지 시 EndedRoomView로 즉시 전환.
+        // router.push(`/room/${roomId}`)는 같은 라우트라 Next.js가 재렌더하지 않아 부모 상태가 stale로 남는 문제가 있었음.
+        if (onMeetingEnded) {
+            await onMeetingEnded();
+        } else {
+            router.push(`/room/${roomId}`);
+        }
     };
 
     const barMultipliers = [0.4, 0.6, 0.9, 1.2, 1.5, 1.2, 0.9, 0.6, 0.4];
