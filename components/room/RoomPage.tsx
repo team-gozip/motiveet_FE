@@ -28,6 +28,7 @@ function VideoTile({
     isLocal = false,
     isMuted = false,
     isCameraOff = false,
+    isScreenSharing = false,
     isBeingRecorded = false,
     onClick,
 }: {
@@ -36,18 +37,17 @@ function VideoTile({
     isLocal?: boolean;
     isMuted?: boolean;
     isCameraOff?: boolean;
+    isScreenSharing?: boolean;
     isBeingRecorded?: boolean;
     onClick?: () => void;
 }) {
     const videoNodeRef = useRef<HTMLVideoElement | null>(null);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [hasVideo, setHasVideo] = useState(false);
-    const [isScreenShare, setIsScreenShare] = useState(false);
 
     useEffect(() => {
         if (!stream) {
             setHasVideo(false);
-            setIsScreenShare(false);
             return;
         }
 
@@ -68,9 +68,6 @@ function VideoTile({
                 }
             }
             setHasVideo(!!track && track.enabled && !track.muted && track.readyState === 'live');
-            const trackLabel = track?.label.toLowerCase() || '';
-            const isScreen = trackLabel.includes('screen') || trackLabel.includes('window') || trackLabel.includes('display');
-            setIsScreenShare(isScreen);
         };
 
         update();
@@ -199,7 +196,8 @@ function VideoTile({
     }, [stream, isMuted]);
 
     const displayName = (label.split('@')[0] || label).slice(0, 10);
-    const cameraOff = !stream || !hasVideo || isCameraOff;
+    // 화면공유 중이면 cam off 플래그를 무시하고 항상 video 노출 (공유 트랙이 살아있음)
+    const cameraOff = !stream || !hasVideo || (isCameraOff && !isScreenSharing);
 
     return (
         <div
@@ -221,7 +219,7 @@ function VideoTile({
                     ref={attachStream}
                     autoPlay
                     playsInline
-                    className={`w-full h-full object-cover ${cameraOff ? 'invisible' : ''} ${!isLocal && !isScreenShare ? 'scale-x-[-1]' : ''}`}
+                    className={`w-full h-full object-cover ${cameraOff ? 'invisible' : ''}`}
                 />
             )}
             {cameraOff && (
@@ -707,7 +705,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
     };
 
     const allParticipants = [
-        { userId: myUserId, stream: localStream, isLocal: true, micOn: isMicOn, cameraOn: isCameraOn },
+        { userId: myUserId, stream: localStream, isLocal: true, micOn: isMicOn, cameraOn: isCameraOn, isScreenSharing },
         ...Array.from(peers.values()).map(p => ({ ...p, isLocal: false })),
     ];
 
@@ -790,6 +788,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                     isLocal={p.isLocal}
                                     isMuted={!p.micOn}
                                     isCameraOff={!p.cameraOn}
+                                    isScreenSharing={p.isScreenSharing}
                                     isBeingRecorded={recordingTarget === p.userId}
                                     onClick={() => handleTileClick(p.userId)}
                                 />

@@ -49,6 +49,7 @@ export interface PeerState {
     stream: MediaStream | null;
     micOn: boolean;
     cameraOn: boolean;
+    isScreenSharing: boolean;
 }
 
 export interface RecordRequest {
@@ -79,6 +80,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
     const wsRef = useRef<WebSocket | null>(null);
     const isMicOnRef = useRef(initialMicOn);
     const isCameraOnRef = useRef(initialCameraOn);
+    const isScreenSharingRef = useRef(false);
     const localStreamRef = useRef<MediaStream | null>(null);
     const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
     const screenStreamRef = useRef<MediaStream | null>(null);
@@ -160,6 +162,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
                     stream: new MediaStream(stream.getTracks()),
                     micOn: existing?.micOn ?? true,
                     cameraOn: existing?.cameraOn ?? true,
+                    isScreenSharing: existing?.isScreenSharing ?? false,
                 });
                 return next;
             });
@@ -175,7 +178,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
         pcsRef.current.set(peerId, pc);
         setPeers(prev => {
             const next = new Map(prev);
-            if (!next.has(peerId)) next.set(peerId, { userId: peerId, stream: null, micOn: true, cameraOn: true });
+            if (!next.has(peerId)) next.set(peerId, { userId: peerId, stream: null, micOn: true, cameraOn: true, isScreenSharing: false });
             return next;
         });
         return pc;
@@ -223,7 +226,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
                 await sendOffer(peerId, pc);
             }
             // 새 참가자가 내 mic/camera 상태를 알 수 있도록 broadcast
-            sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: isCameraOnRef.current });
+            sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: isCameraOnRef.current, screenSharing: isScreenSharingRef.current });
 
         } else if (type === 'participants') {
             // We just joined — server tells us who's already in the room.
@@ -296,6 +299,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
                     stream: existing?.stream ?? null,
                     micOn: Boolean(msg.micOn),
                     cameraOn: Boolean(msg.cameraOn),
+                    isScreenSharing: Boolean(msg.screenSharing),
                 });
                 return next;
             });
@@ -392,7 +396,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
         const newMicOn = !isMicOnRef.current;
         isMicOnRef.current = newMicOn;
         setIsMicOn(newMicOn);
-        sendWs({ type: 'media-state', from: myId.current, micOn: newMicOn, cameraOn: isCameraOnRef.current });
+        sendWs({ type: 'media-state', from: myId.current, micOn: newMicOn, cameraOn: isCameraOnRef.current, screenSharing: isScreenSharingRef.current });
     }, [sendWs]);
 
     const replaceVideoTrack = useCallback(async (newTrack: MediaStreamTrack | null) => {
@@ -420,7 +424,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
                     setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
                     isCameraOnRef.current = true;
                     setIsCameraOn(true);
-                    sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: true });
+                    sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: true, screenSharing: isScreenSharingRef.current });
                 }
             } catch (e) {
                 console.error('카메라 권한을 얻을 수 없습니다', e);
@@ -435,7 +439,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
         const newCameraOn = currentTracks[0]?.enabled ?? false;
         isCameraOnRef.current = newCameraOn;
         setIsCameraOn(newCameraOn);
-        sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: newCameraOn });
+        sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: newCameraOn, screenSharing: isScreenSharingRef.current });
     }, [replaceVideoTrack, sendWs]);
 
     const startScreenShare = useCallback(async () => {
@@ -451,10 +455,12 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
                 localStreamRef.current.addTrack(screenTrack);
                 setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
             }
+            isScreenSharingRef.current = true;
             setIsScreenSharing(true);
+            sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: isCameraOnRef.current, screenSharing: true });
             screenTrack.onended = () => { stopScreenShareRef.current(); };
         } catch { /* cancelled */ }
-    }, [isScreenSharing, replaceVideoTrack]);
+    }, [isScreenSharing, replaceVideoTrack, sendWs]);
 
     const stopScreenShare = useCallback(async () => {
         if (!isScreenSharing) return;
@@ -467,8 +473,10 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
             localStreamRef.current.addTrack(cameraTrack);
             setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
         }
+        isScreenSharingRef.current = false;
         setIsScreenSharing(false);
-    }, [isScreenSharing, replaceVideoTrack]);
+        sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: isCameraOnRef.current, screenSharing: false });
+    }, [isScreenSharing, replaceVideoTrack, sendWs]);
 
     stopScreenShareRef.current = stopScreenShare;
 
