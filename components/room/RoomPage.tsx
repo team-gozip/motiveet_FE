@@ -816,7 +816,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                         </div>
 
                         {/* 패널 콘텐츠 */}
-                        <div className="flex-1 overflow-hidden">
+                        <div className="flex-1 min-h-0 overflow-hidden">
 
                             {/* 녹취록 */}
                             {sidePanel === 'transcript' && (

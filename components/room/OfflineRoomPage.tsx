@@ -512,7 +512,7 @@ export default function OfflineRoomPage({
             )}
 
             {/* ── Body ─────────────────────────────────────────── */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 min-h-0 flex overflow-hidden">
 
                 {/* 왼쪽: AI 채팅 (항상 표시, 회의 진행 중에만 사용 가능) */}
                 <div className="flex-shrink-0 w-72 flex flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--card-bg)]">
@@ -521,7 +521,7 @@ export default function OfflineRoomPage({
                             AI 채팅
                         </span>
                     </div>
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 min-h-0 overflow-hidden">
                         <ChatInterface
                             ref={chatRef}
                             chatId={effectiveChatId}
