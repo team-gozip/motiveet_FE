@@ -210,7 +210,7 @@ function VideoTile({
                     ? 'ring-[3px] ring-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)] z-10' 
                     : isBeingRecorded 
                         ? 'ring-2 ring-red-500' 
-                        : !isLocal ? 'hover:ring-2 hover:ring-indigo-500/50' : ''
+                        : !isLocal ? 'hover:ring-2 hover:ring-[var(--accent-primary)]/50' : ''
             }`}
             onClick={!isLocal ? onClick : undefined}
         >
@@ -276,12 +276,12 @@ function ControlBtn({
             title={title}
             className={`flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl transition-all text-xs font-medium ${
                 danger
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    ? 'bg-[var(--danger)] hover:opacity-90 text-white'
                     : highlighted
-                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        ? 'bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] text-white'
                         : active
-                            ? 'bg-white/10 hover:bg-white/20 text-white'
-                            : 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
+                            ? 'bg-[var(--card-bg)] hover:bg-[var(--highlight-bg)] text-[var(--foreground)] border border-[var(--border-color)]'
+                            : 'bg-[var(--danger)]/10 hover:bg-[var(--danger)]/15 text-[var(--danger)] border border-[var(--danger)]/20'
             }`}
         >
             {children}
@@ -302,7 +302,7 @@ function RecordPermissionModal({
 }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-gray-800 border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
                 <div className="flex items-center justify-center mb-4">
                     <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
                         <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -310,21 +310,21 @@ function RecordPermissionModal({
                         </svg>
                     </div>
                 </div>
-                <h3 className="text-center text-white font-semibold mb-2">마이크 녹음 요청</h3>
-                <p className="text-center text-gray-400 text-sm mb-6">
-                    <span className="text-indigo-400 font-medium">{requesterName}</span>님이 당신의 마이크 녹음을 요청했습니다.<br />
+                <h3 className="text-center text-[var(--foreground)] font-semibold mb-2">마이크 녹음 요청</h3>
+                <p className="text-center text-[var(--text-secondary)] text-sm mb-6">
+                    <span className="text-[var(--accent-primary)] font-medium">{requesterName}</span>님이 당신의 마이크 녹음을 요청했습니다.<br />
                     녹음을 허용하시겠습니까?
                 </p>
                 <div className="flex gap-3">
                     <button
                         onClick={onReject}
-                        className="flex-1 px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-xl text-sm font-medium transition-colors"
+                        className="flex-1 px-4 py-2.5 bg-[var(--highlight-bg)] hover:bg-[var(--border-color)] text-[var(--foreground)] rounded-xl text-sm font-medium transition-colors"
                     >
                         거절
                     </button>
                     <button
                         onClick={onAccept}
-                        className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors"
+                        className="flex-1 px-4 py-2.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-sm font-medium transition-colors"
                     >
                         허용
                     </button>
@@ -722,7 +722,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
     const totalTranscriptCount = Array.from(userTranscripts.values()).reduce((s, a) => s + a.length, 0);
 
     return (
-        <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
+        <div className="h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col overflow-hidden">
             {/* 녹음 요청 모달 */}
             {incomingRecordRequest && (
                 <RecordPermissionModal
@@ -733,38 +733,38 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
             )}
 
             {/* ── 헤더 ─────────────────────────────────────────────── */}
-            <header className="flex items-center justify-between px-6 py-3 bg-gray-900/80 backdrop-blur border-b border-white/5 flex-shrink-0">
+            <header className="flex items-center justify-between px-6 py-3 bg-[var(--header-bg)]/90 backdrop-blur border-b border-[var(--border-color)] flex-shrink-0">
                 <div className="flex items-center gap-3">
                     <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
-                    <span className="text-sm font-semibold text-white">온라인 회의</span>
-                    <span className="text-xs text-gray-500">Room #{roomId}</span>
+                    <span className="text-sm font-semibold text-[var(--foreground)]">온라인 회의</span>
+                    <span className="text-xs text-[var(--text-tertiary)]">Room #{roomId}</span>
                 </div>
                 <div className="flex items-center gap-2">
                     {isMeetingActive && (
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600/20 border border-emerald-500/40 rounded-lg text-xs text-emerald-300 font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--success)]/10 border border-[var(--success)]/30 rounded-lg text-xs text-[var(--success)] font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] animate-pulse" />
                             회의 진행 중
                         </span>
                     )}
                     {isScreenSharing && (
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-600/20 border border-indigo-500/40 rounded-lg text-xs text-indigo-300 font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/30 rounded-lg text-xs text-[var(--accent-primary)] font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] animate-pulse" />
                             화면 공유 중
                         </span>
                     )}
                     {recordingTarget && (
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-600/20 border border-red-500/40 rounded-lg text-xs text-red-300 font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--danger)]/10 border border-[var(--danger)]/30 rounded-lg text-xs text-[var(--danger)] font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--danger)] animate-pulse" />
                             녹음 중
                         </span>
                     )}
                     {pendingRecordRequest && (
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-600/20 border border-amber-500/40 rounded-lg text-xs text-amber-300 font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--warning)]/10 border border-[var(--warning)]/30 rounded-lg text-xs text-[var(--warning)] font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning)] animate-pulse" />
                             녹음 요청 대기 중
                         </span>
                     )}
-                    <span className="text-xs text-gray-500">{allParticipants.length}명 참여 중</span>
+                    <span className="text-xs text-[var(--text-tertiary)]">{allParticipants.length}명 참여 중</span>
                 </div>
             </header>
 
@@ -776,7 +776,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                     {error ? (
                         <div className="text-center">
                             <p className="text-red-400 text-sm mb-3">{error}</p>
-                            <button onClick={handleLeaveClick} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm">나가기</button>
+                            <button onClick={handleLeaveClick} className="px-4 py-2 bg-[var(--card-bg)] hover:bg-[var(--highlight-bg)] border border-[var(--border-color)] text-[var(--foreground)] rounded-lg text-sm">나가기</button>
                         </div>
                     ) : (
                         <div className={`grid ${gridCols} gap-3 w-full h-full mx-auto`}>
@@ -799,15 +799,15 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
 
                 {/* ── 사이드 패널 ─────────────────────────────────────── */}
                 {sidePanel && (
-                    <aside className="flex-shrink-0 w-80 flex flex-col bg-gray-900 border-l border-white/5 overflow-hidden">
+                    <aside className="flex-shrink-0 w-80 flex flex-col bg-[var(--card-bg)] border-l border-[var(--border-color)] overflow-hidden">
                         {/* 패널 헤더 */}
-                        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/10">
-                            <span className="text-sm font-semibold text-white">
+                        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
+                            <span className="text-sm font-semibold text-[var(--foreground)]">
                                 {sidePanel === 'transcript' ? '녹취록' : sidePanel === 'chat' ? 'AI 채팅' : '메모'}
                             </span>
                             <button
                                 onClick={() => setSidePanel(null)}
-                                className="p-1 rounded-md text-gray-500 hover:text-gray-300 hover:bg-white/10 transition-colors"
+                                className="p-1 rounded-md text-[var(--text-tertiary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -822,9 +822,9 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                             {sidePanel === 'transcript' && (
                                 <div className="h-full flex flex-col">
                                     {/* 유저 선택 */}
-                                    <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/5 overflow-x-auto">
+                                    <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-[var(--border-color)] overflow-x-auto">
                                         {recordedUsers.length === 0 && !recordingTarget ? (
-                                            <span className="text-[10px] text-gray-600">참가자 영상을 클릭하여 녹음을 시작하세요</span>
+                                            <span className="text-[10px] text-[var(--text-tertiary)]">참가자 영상을 클릭하여 녹음을 시작하세요</span>
                                         ) : (
                                             <>
                                                 {recordedUsers.map(uid => (
@@ -833,8 +833,8 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                                         onClick={() => setSelectedTranscriptUser(uid)}
                                                         className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
                                                             selectedTranscriptUser === uid
-                                                                ? 'bg-indigo-600 text-white'
-                                                                : 'bg-white/10 text-gray-400 hover:bg-white/15 hover:text-gray-200'
+                                                                ? 'bg-[var(--accent-primary)] text-white'
+                                                                : 'bg-[var(--highlight-bg)] text-[var(--text-secondary)] hover:text-[var(--foreground)]'
                                                         }`}
                                                     >
                                                         <span className={`w-1.5 h-1.5 rounded-full ${recordingTarget === uid ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'}`} />
@@ -843,8 +843,8 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                                     </button>
                                                 ))}
                                                 {recordingTarget && !recordedUsers.includes(recordingTarget) && (
-                                                    <div className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-red-400 bg-red-500/10">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                                    <div className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-[var(--danger)] bg-[var(--danger)]/10">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--danger)] animate-pulse" />
                                                         {labelOf(recordingTarget)} 인식 중...
                                                     </div>
                                                 )}
@@ -855,26 +855,26 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                     <div className="flex-1 overflow-y-auto p-3 space-y-2">
                                         {!selectedTranscriptUser ? (
                                             <div className="flex items-center justify-center h-full">
-                                                <p className="text-xs text-gray-600 text-center">
+                                                <p className="text-xs text-[var(--text-tertiary)] text-center">
                                                     {recordingTarget ? '음성을 인식하는 중...' : '위에서 참가자를 선택하세요'}
                                                 </p>
                                             </div>
                                         ) : currentTranscripts.length === 0 ? (
-                                            <p className="text-xs text-gray-600 text-center mt-6">
+                                            <p className="text-xs text-[var(--text-tertiary)] text-center mt-6">
                                                 {recordingTarget === selectedTranscriptUser ? '음성을 인식하는 중...' : '아직 녹취 내용이 없습니다.'}
                                             </p>
                                         ) : (
                                             currentTranscripts.map((entry, i) => (
-                                                <div key={i} className="space-y-1.5 pb-3 border-b border-white/5 last:border-b-0">
+                                                <div key={i} className="space-y-1.5 pb-3 border-b border-[var(--border-color)] last:border-b-0">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-[11px] font-semibold text-indigo-300">
+                                                        <span className="text-[11px] font-semibold text-[var(--accent-primary)]">
                                                             {selectedTranscriptUser === myUserId ? '나' : labelOf(selectedTranscriptUser!)}
                                                         </span>
-                                                        <span className="text-[10px] text-gray-600 tabular-nums">
+                                                        <span className="text-[10px] text-[var(--text-tertiary)] tabular-nums">
                                                             {toTimeStr(entry.startTime)} ~ {toTimeStr(entry.endTime)}
                                                         </span>
                                                     </div>
-                                                    <p className="text-sm text-gray-300 leading-relaxed pl-2 border-l-2 border-indigo-500/30">{entry.text}</p>
+                                                    <p className="text-sm text-[var(--foreground)] leading-relaxed pl-2 border-l-2 border-[var(--accent-primary)]/30">{entry.text}</p>
                                                 </div>
                                             ))
                                         )}
@@ -905,7 +905,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
             </div>
 
             {/* ── 컨트롤 바 (footer) ──────────────────────────────────── */}
-            <div className="flex-shrink-0 flex items-center justify-center gap-2 py-3 px-6 bg-gray-900/80 backdrop-blur border-t border-white/5">
+            <div className="flex-shrink-0 flex items-center justify-center gap-2 py-3 px-6 bg-[var(--header-bg)]/90 backdrop-blur border-t border-[var(--border-color)]">
 
                 {/* 미디어 컨트롤 */}
                 <ControlBtn onClick={toggleMic} active={isMicOn} title={isMicOn ? '마이크 끄기' : '마이크 켜기'}>
@@ -956,7 +956,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                     </ControlBtn>
                 )}
 
-                <div className="w-px h-8 bg-white/10 mx-1" />
+                <div className="w-px h-8 bg-[var(--border-color)] mx-1" />
 
                 {/* 패널 토글 버튼 */}
                 <ControlBtn
@@ -1002,7 +1002,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                     <span>메모</span>
                 </ControlBtn>
 
-                <div className="w-px h-8 bg-white/10 mx-1" />
+                <div className="w-px h-8 bg-[var(--border-color)] mx-1" />
 
                 {/* 회의 시작/종료 (host only) */}
                 {isHost && !isMeetingActive && (
@@ -1034,7 +1034,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
             {/* 회의 종료 모달 (비호스트용) */}
             {showMeetingEndedModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                    <div className="bg-gray-800 border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+                    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
                         <div className="flex items-center justify-center mb-4">
                             <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
                                 <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1042,8 +1042,8 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                 </svg>
                             </div>
                         </div>
-                        <h3 className="text-center text-white font-semibold mb-2">회의가 종료되었습니다</h3>
-                        <p className="text-center text-gray-400 text-sm mb-6">
+                        <h3 className="text-center text-[var(--foreground)] font-semibold mb-2">회의가 종료되었습니다</h3>
+                        <p className="text-center text-[var(--text-secondary)] text-sm mb-6">
                             호스트가 회의를 종료했습니다. 잠시 후 자동으로 이동합니다.
                         </p>
                         <div className="flex gap-3">
@@ -1052,7 +1052,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                     setShowMeetingEndedModal(false);
                                     router.push(`/folder/${folderId}`);
                                 }}
-                                className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors"
+                                className="flex-1 px-4 py-2.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-sm font-medium transition-colors"
                             >
                                 돌아가기
                             </button>
@@ -1123,10 +1123,10 @@ export default function RoomPage({ roomId }: { roomId: number }) {
 
     if (loadError) {
         return (
-            <div className="h-screen bg-gray-950 flex items-center justify-center px-6">
+            <div className="h-screen bg-[var(--background)] flex items-center justify-center px-6">
                 <div className="text-center">
                     <p className="text-red-400 text-sm mb-3">{loadError}</p>
-                    <button onClick={() => router.push('/choose')} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm">돌아가기</button>
+                    <button onClick={() => router.push('/choose')} className="px-4 py-2 bg-[var(--card-bg)] hover:bg-[var(--highlight-bg)] border border-[var(--border-color)] text-[var(--foreground)] rounded-lg text-sm">돌아가기</button>
                 </div>
             </div>
         );
@@ -1134,8 +1134,8 @@ export default function RoomPage({ roomId }: { roomId: number }) {
 
     if (!roomInfo) {
         return (
-            <div className="h-screen bg-gray-950 flex items-center justify-center">
-                <span className="text-gray-500 text-sm">로딩 중...</span>
+            <div className="h-screen bg-[var(--background)] flex items-center justify-center">
+                <span className="text-[var(--text-tertiary)] text-sm">로딩 중...</span>
             </div>
         );
     }
@@ -1236,13 +1236,15 @@ function EndedRoomView({
                     </svg>
                 </button>
                 <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        isOnline ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                    <span className={`px-2.5 py-1 rounded-md border text-[10px] font-bold ${
+                        isOnline
+                            ? 'bg-[var(--accent-primary)]/15 border-[var(--accent-primary)]/40 text-[var(--accent-primary)]'
+                            : 'bg-[var(--success)]/10 border-[var(--success)]/20 text-[var(--success)]'
                     }`}>
                         {isOnline ? '온라인' : '오프라인'}
                     </span>
                     <span className="text-sm font-semibold">{roomName || `Room #${roomId}`}</span>
-                    <span className="px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-800 text-[10px] font-bold text-gray-500">
+                    <span className="px-2.5 py-1 rounded-md border border-[var(--border-color)] bg-[var(--card-bg)] text-[10px] font-bold text-[var(--foreground)] shadow-sm">
                         종료됨
                     </span>
                 </div>
@@ -1256,13 +1258,13 @@ function EndedRoomView({
                         onClick={() => setActiveTab(tab.key)}
                         className={`px-6 py-3 text-sm font-semibold transition-colors border-b-2 ${
                             activeTab === tab.key
-                                ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                                ? 'border-[var(--accent-primary)] text-[var(--accent-primary)]'
                                 : 'border-transparent text-[var(--foreground)] opacity-40 hover:opacity-70'
                         }`}
                     >
                         {tab.label}
                         {tab.key === 'summary' && isSummaryLoading && (
-                            <span className="ml-2 inline-block w-3 h-3 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+                            <span className="ml-2 inline-block w-3 h-3 rounded-full border-2 border-[var(--accent-primary)]/30 border-t-[var(--accent-primary)] animate-spin" />
                         )}
                     </button>
                 ))}
@@ -1290,7 +1292,7 @@ function EndedRoomView({
                         <h2 className="text-lg font-bold mb-4">회의 요약</h2>
                         {isSummaryLoading ? (
                             <div className="text-center py-16">
-                                <div className="mx-auto w-8 h-8 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin mb-3" />
+                                <div className="mx-auto w-8 h-8 rounded-full border-2 border-[var(--accent-primary)]/30 border-t-[var(--accent-primary)] animate-spin mb-3" />
                                 <p className="text-sm text-[var(--foreground)] opacity-40">요약을 불러오는 중...</p>
                             </div>
                         ) : roomSummary ? (
