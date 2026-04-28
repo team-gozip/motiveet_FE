@@ -461,7 +461,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
         }
     };
 
-    // ── 회의 종료 → 방 종료 + 전원 퇴장 ─────────────────────────────
+    // ── 회의 종료 → 방 종료 + 전원 퇴장 ─────────────────────────────-
     // 직렬화 이유:
     //   1) meeting end가 먼저 끝나야 요약을 받을 수 있다 → setActiveMeeting에 summary 전달.
     //   2) 직렬 실행이라 한 단계 실패해도 이후 단계의 race가 없음.
