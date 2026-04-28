@@ -47,6 +47,8 @@ function getWsBase(): string {
 export interface PeerState {
     userId: string;
     stream: MediaStream | null;
+    micOn: boolean;
+    cameraOn: boolean;
 }
 
 export interface RecordRequest {
@@ -75,6 +77,8 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
     const [error, setError] = useState<string | null>(null);
 
     const wsRef = useRef<WebSocket | null>(null);
+    const isMicOnRef = useRef(initialMicOn);
+    const isCameraOnRef = useRef(initialCameraOn);
     const localStreamRef = useRef<MediaStream | null>(null);
     const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
     const screenStreamRef = useRef<MediaStream | null>(null);
@@ -150,7 +154,13 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
             remoteStreamsRef.current.set(peerId, stream);
             setPeers(prev => {
                 const next = new Map(prev);
-                next.set(peerId, { userId: peerId, stream: new MediaStream(stream.getTracks()) });
+                const existing = next.get(peerId);
+                next.set(peerId, {
+                    userId: peerId,
+                    stream: new MediaStream(stream.getTracks()),
+                    micOn: existing?.micOn ?? true,
+                    cameraOn: existing?.cameraOn ?? true,
+                });
                 return next;
             });
         };
@@ -165,7 +175,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
         pcsRef.current.set(peerId, pc);
         setPeers(prev => {
             const next = new Map(prev);
-            if (!next.has(peerId)) next.set(peerId, { userId: peerId, stream: null });
+            if (!next.has(peerId)) next.set(peerId, { userId: peerId, stream: null, micOn: true, cameraOn: true });
             return next;
         });
         return pc;
@@ -212,6 +222,8 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
             if (shouldOffer && pc.signalingState === 'stable') {
                 await sendOffer(peerId, pc);
             }
+            // 새 참가자가 내 mic/camera 상태를 알 수 있도록 broadcast
+            sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: isCameraOnRef.current });
 
         } else if (type === 'participants') {
             // We just joined — server tells us who's already in the room.
@@ -272,6 +284,21 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
                 queue.push(msg.candidate as RTCIceCandidateInit);
                 pendingCandidatesRef.current.set(peerId, queue);
             }
+
+        } else if (type === 'media-state') {
+            const peerId = msg.from as string;
+            if (!peerId || peerId === myId.current) return;
+            setPeers(prev => {
+                const next = new Map(prev);
+                const existing = next.get(peerId);
+                next.set(peerId, {
+                    userId: peerId,
+                    stream: existing?.stream ?? null,
+                    micOn: Boolean(msg.micOn),
+                    cameraOn: Boolean(msg.cameraOn),
+                });
+                return next;
+            });
 
         } else if (type === 'record-request') {
             onRecordRequest?.({ from: msg.from as string });
@@ -362,8 +389,11 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
 
     const toggleMic = useCallback(() => {
         localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
-        setIsMicOn(v => !v);
-    }, []);
+        const newMicOn = !isMicOnRef.current;
+        isMicOnRef.current = newMicOn;
+        setIsMicOn(newMicOn);
+        sendWs({ type: 'media-state', from: myId.current, micOn: newMicOn, cameraOn: isCameraOnRef.current });
+    }, [sendWs]);
 
     const replaceVideoTrack = useCallback(async (newTrack: MediaStreamTrack | null) => {
         const replacements = Array.from(pcsRef.current.values()).map(async (pc) => {
@@ -378,7 +408,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
 
     const toggleCamera = useCallback(async () => {
         const currentTracks = localStreamRef.current?.getVideoTracks() || [];
-        
+
         if (currentTracks.length === 0) {
             try {
                 const vidStream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -388,7 +418,9 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
                     cameraTrackRef.current = newTrack;
                     await replaceVideoTrack(newTrack);
                     setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+                    isCameraOnRef.current = true;
                     setIsCameraOn(true);
+                    sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: true });
                 }
             } catch (e) {
                 console.error('카메라 권한을 얻을 수 없습니다', e);
@@ -400,8 +432,11 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
         if (localStreamRef.current) {
             setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
         }
-        setIsCameraOn(v => !v);
-    }, [replaceVideoTrack]);
+        const newCameraOn = currentTracks[0]?.enabled ?? false;
+        isCameraOnRef.current = newCameraOn;
+        setIsCameraOn(newCameraOn);
+        sendWs({ type: 'media-state', from: myId.current, micOn: isMicOnRef.current, cameraOn: newCameraOn });
+    }, [replaceVideoTrack, sendWs]);
 
     const startScreenShare = useCallback(async () => {
         if (isScreenSharing) return;

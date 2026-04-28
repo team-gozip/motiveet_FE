@@ -27,6 +27,7 @@ function VideoTile({
     label,
     isLocal = false,
     isMuted = false,
+    isCameraOff = false,
     isBeingRecorded = false,
     onClick,
 }: {
@@ -34,6 +35,7 @@ function VideoTile({
     label: string;
     isLocal?: boolean;
     isMuted?: boolean;
+    isCameraOff?: boolean;
     isBeingRecorded?: boolean;
     onClick?: () => void;
 }) {
@@ -131,7 +133,7 @@ function VideoTile({
         const audioTracks = stream.getAudioTracks();
         if (audioTracks.length === 0) return;
 
-        if (isLocal && isMuted) {
+        if (isMuted) {
             setIsSpeaking(false);
             return;
         }
@@ -194,10 +196,10 @@ function VideoTile({
             try { source.disconnect(); } catch (e) {}
             try { audioContext.close(); } catch (e) {}
         };
-    }, [stream, isMuted, isLocal]);
+    }, [stream, isMuted]);
 
     const displayName = (label.split('@')[0] || label).slice(0, 10);
-    const cameraOff = !stream || !hasVideo;
+    const cameraOff = !stream || !hasVideo || isCameraOff;
 
     return (
         <div
@@ -334,6 +336,23 @@ function RecordPermissionModal({
     );
 }
 
+// ── Types ────────────────────────────────────────────────────────────
+
+interface TranscriptEntry {
+    text: string;
+    startTime: Date;
+    endTime: Date;
+}
+
+const toTimeStr = (d: Date) =>
+    d.toLocaleTimeString('ko-KR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Seoul',
+    });
+
 // ── OnlineRoomContent ────────────────────────────────────────────────
 
 function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostId: number; folderId: number }) {
@@ -394,8 +413,8 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
     const [recordingTarget, setRecordingTarget] = useState<string | null>(null);
     const [incomingRecordRequest, setIncomingRecordRequest] = useState<string | null>(null);
     const [pendingRecordRequest, setPendingRecordRequest] = useState<string | null>(null);
-    // 유저별 녹취록: userId → 텍스트 배열
-    const [userTranscripts, setUserTranscripts] = useState<Map<string, string[]>>(new Map());
+    // 유저별 녹취록: userId → 엔트리 배열
+    const [userTranscripts, setUserTranscripts] = useState<Map<string, TranscriptEntry[]>>(new Map());
     const [selectedTranscriptUser, setSelectedTranscriptUser] = useState<string | null>(null);
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
@@ -569,8 +588,10 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                 mediaRecorderRef.current.stop();
             }
 
+            const chunkStart = new Date();
             const recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
             recorder.ondataavailable = (e) => {
+                const chunkEnd = new Date();
                 if (e.data.size > 0) {
                     const audioBlob = new Blob([e.data], { type: 'audio/webm' });
                     roomApi.uploadAudio(roomId, audioBlob)
@@ -579,7 +600,11 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                 setUserTranscripts(prev => {
                                     const next = new Map(prev);
                                     const existing = next.get(targetPeerId) ?? [];
-                                    next.set(targetPeerId, [...existing, res.text]);
+                                    next.set(targetPeerId, [...existing, {
+                                        text: res.text,
+                                        startTime: chunkStart,
+                                        endTime: chunkEnd,
+                                    }]);
                                     return next;
                                 });
                                 setSelectedTranscriptUser(prev => prev ?? targetPeerId);
@@ -682,7 +707,7 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
     };
 
     const allParticipants = [
-        { userId: myUserId, stream: localStream, isLocal: true },
+        { userId: myUserId, stream: localStream, isLocal: true, micOn: isMicOn, cameraOn: isCameraOn },
         ...Array.from(peers.values()).map(p => ({ ...p, isLocal: false })),
     ];
 
@@ -763,7 +788,8 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                     stream={p.stream}
                                     label={labelOf(p.userId)}
                                     isLocal={p.isLocal}
-                                    isMuted={p.isLocal && !isMicOn}
+                                    isMuted={!p.micOn}
+                                    isCameraOff={!p.cameraOn}
                                     isBeingRecorded={recordingTarget === p.userId}
                                     onClick={() => handleTileClick(p.userId)}
                                 />
@@ -839,10 +865,17 @@ function OnlineRoomContent({ roomId, hostId, folderId }: { roomId: number; hostI
                                                 {recordingTarget === selectedTranscriptUser ? '음성을 인식하는 중...' : '아직 녹취 내용이 없습니다.'}
                                             </p>
                                         ) : (
-                                            currentTranscripts.map((text, i) => (
-                                                <div key={i} className="flex gap-2.5">
-                                                    <span className="flex-shrink-0 text-[10px] text-gray-600 mt-0.5 tabular-nums w-5 text-right">{i + 1}</span>
-                                                    <p className="text-sm text-gray-300 leading-relaxed">{text}</p>
+                                            currentTranscripts.map((entry, i) => (
+                                                <div key={i} className="space-y-1.5 pb-3 border-b border-white/5 last:border-b-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[11px] font-semibold text-indigo-300">
+                                                            {selectedTranscriptUser === myUserId ? '나' : labelOf(selectedTranscriptUser!)}
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-600 tabular-nums">
+                                                            {toTimeStr(entry.startTime)} ~ {toTimeStr(entry.endTime)}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-300 leading-relaxed pl-2 border-l-2 border-indigo-500/30">{entry.text}</p>
                                                 </div>
                                             ))
                                         )}
