@@ -385,7 +385,7 @@ export function useWebRTC({ roomId, initialMicOn = true, initialCameraOn = true,
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roomId]);
 
-    // ── controls ──────────────────────────────────────────────────────
+    // ── controls ──────────────────────────────────────────────────────-
 
     const toggleMic = useCallback(() => {
         localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });

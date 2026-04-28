@@ -20,7 +20,7 @@ function getCurrentUserId(): number | null {
     } catch { return null; }
 }
 
-// ── VideoTile ────────────────────────────────────────────────────────
+// ── VideoTile ────────────────────────────────────────────────────────-
 
 function VideoTile({
     stream,
