@@ -25,7 +25,6 @@ export default function EditFolderModal({ folder, onClose, onUpdated, onDeleted 
     const [imageUrl, setImageUrl] = useState<string | null>(folder.imageUrl);
     const [isLoading, setIsLoading] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [confirmDelete, setConfirmDelete] = useState(false);
     const [error, setError] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,10 +70,6 @@ export default function EditFolderModal({ folder, onClose, onUpdated, onDeleted 
     };
 
     const handleDelete = async () => {
-        if (!confirmDelete) {
-            setConfirmDelete(true);
-            return;
-        }
         setIsDeleting(true);
         try {
             await folderApi.delete(folder.folderId);
@@ -82,7 +77,6 @@ export default function EditFolderModal({ folder, onClose, onUpdated, onDeleted 
         } catch {
             setError('그룹 삭제에 실패했습니다. 다시 시도해주세요.');
             setIsDeleting(false);
-            setConfirmDelete(false);
         }
     };
 
@@ -186,41 +180,25 @@ export default function EditFolderModal({ folder, onClose, onUpdated, onDeleted 
                     <button
                         onClick={handleDelete}
                         disabled={isDeleting}
-                        className={`h-8 px-3 text-sm rounded-md font-medium transition-colors ${
-                            confirmDelete
-                                ? 'bg-[var(--danger)] text-white hover:bg-red-700'
-                                : 'text-[var(--danger)] hover:bg-[var(--danger)]/10'
-                        } disabled:opacity-40`}
+                        className="h-8 px-3 text-sm rounded-md font-medium text-[var(--danger)] hover:bg-[var(--danger)]/10 transition-colors disabled:opacity-40"
                     >
-                        {isDeleting ? '삭제 중...' : confirmDelete ? '정말 삭제하기' : '삭제하기'}
+                        {isDeleting ? '삭제 중...' : '삭제하기'}
                     </button>
 
                     <div className="flex items-center gap-2">
-                        {confirmDelete && (
-                            <button
-                                onClick={() => setConfirmDelete(false)}
-                                className="h-8 px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-colors"
-                            >
-                                취소
-                            </button>
-                        )}
-                        {!confirmDelete && (
-                            <>
-                                <button
-                                    onClick={onClose}
-                                    className="h-8 px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-colors"
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    onClick={handleSubmit}
-                                    disabled={isLoading || !name.trim()}
-                                    className="h-8 px-3.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white rounded-md text-sm font-medium transition-colors"
-                                >
-                                    {isLoading ? '수정 중...' : '수정하기'}
-                                </button>
-                            </>
-                        )}
+                        <button
+                            onClick={onClose}
+                            className="h-8 px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-colors"
+                        >
+                            취소
+                        </button>
+                        <button
+                            onClick={handleSubmit}
+                            disabled={isLoading || !name.trim()}
+                            className="h-8 px-3.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white rounded-md text-sm font-medium transition-colors"
+                        >
+                            {isLoading ? '수정 중...' : '수정하기'}
+                        </button>
                     </div>
                 </div>
             </div>
