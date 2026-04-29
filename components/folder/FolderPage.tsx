@@ -147,7 +147,6 @@ export default function FolderPage({ folderId }: FolderPageProps) {
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [showFolderDeleteConfirm, setShowFolderDeleteConfirm] = useState(false);
     const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
     const [isFolderActing, setIsFolderActing] = useState(false);
     const [folderActionError, setFolderActionError] = useState<string | null>(null);
@@ -253,27 +252,6 @@ export default function FolderPage({ folderId }: FolderPageProps) {
             window.alert(parts.join(', '));
         }
         exitDeleteMode();
-    };
-
-    const handleDeleteFolder = async () => {
-        const activeNames = rooms.filter(r => r.activeMeetingId != null).map(r => r.name);
-        if (activeNames.length > 0) {
-            setFolderActionError(
-                `진행 중인 회의가 있어 삭제할 수 없습니다: ${activeNames.join(', ')}. 먼저 종료해주세요.`
-            );
-            return;
-        }
-        setIsFolderActing(true);
-        setFolderActionError(null);
-        try {
-            await folderApi.delete(folderId);
-            setCurrentFolder(null);
-            router.replace('/choose');
-        } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : '그룹 삭제에 실패했습니다';
-            setFolderActionError(msg);
-            setIsFolderActing(false);
-        }
     };
 
     const handleLeaveFolder = async () => {
@@ -485,12 +463,6 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                                     </button>
                                 )}
                                 <button
-                                    onClick={() => isOwner ? setShowFolderDeleteConfirm(true) : setShowLeaveConfirm(true)}
-                                    className="h-9 px-3 bg-[var(--card-bg)] hover:bg-[var(--highlight-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--foreground)] rounded-md text-sm font-medium transition-colors"
-                                >
-                                    {isOwner ? '그룹 삭제' : '그룹 나가기'}
-                                </button>
-                                <button
                                     onClick={() => setShowTypeModal(true)}
                                     className="h-9 px-3.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1.5"
                                 >
@@ -603,78 +575,92 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                         </div>
                     </div>
 
-                    <aside className="border border-[var(--border-color)] rounded-lg bg-[var(--card-bg)] p-4 lg:sticky lg:top-[4.5rem]">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="min-w-0">
-                                <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">날짜 필터</p>
-                                <p className="text-sm font-medium text-[var(--foreground)] mt-0.5 truncate">{calendarTitle}</p>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <button
-                                    onClick={() => moveCalendarMonth(-1)}
-                                    className="h-7 w-7 flex items-center justify-center rounded-md border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
-                                    aria-label="이전 달"
-                                >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                </button>
-                                <button
-                                    onClick={() => moveCalendarMonth(1)}
-                                    className="h-7 w-7 flex items-center justify-center rounded-md border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
-                                    aria-label="다음 달"
-                                >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
-                                </button>
-                                <button
-                                    onClick={resetCalendarFilter}
-                                    className="h-7 px-2.5 rounded-md border border-[var(--border-color)] text-xs text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
-                                >
-                                    전체 조회
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-7 gap-1 mb-1">
-                            {CALENDAR_WEEKDAYS.map((d) => (
-                                <div key={d} className="h-7 flex items-center justify-center text-[11px] font-medium text-[var(--text-tertiary)]">
-                                    {d}
+                    <div className="flex flex-col gap-4 lg:sticky lg:top-[4.5rem]">
+                        <aside className="border border-[var(--border-color)] rounded-lg bg-[var(--card-bg)] p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">날짜 필터</p>
+                                    <p className="text-sm font-medium text-[var(--foreground)] mt-0.5 truncate">{calendarTitle}</p>
                                 </div>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-7 gap-1">
-                            {calendarDays.map(day => (
-                                <button
-                                    key={day.key}
-                                    onClick={() => handleSelectCalendarDate(day.key, day.date)}
-                                    className={`h-10 rounded-md border text-xs transition-colors ${
-                                        selectedDateKey === day.key
-                                            ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]'
-                                            : day.inMonth
-                                                ? 'border-transparent text-[var(--foreground)] hover:bg-[var(--highlight-bg)]'
-                                                : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--highlight-bg)]'
-                                    }`}
-                                >
-                                    <div className="flex items-center justify-center gap-1">
-                                        <span className={`${day.isToday ? 'font-semibold underline decoration-[var(--accent-primary)] decoration-2 underline-offset-2' : ''}`}>
-                                            {day.day}
-                                        </span>
-                                        {day.count > 0 && (
-                                            <span className="text-[10px] text-[var(--accent-primary)] tabular-nums">({day.count})</span>
-                                        )}
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        onClick={() => moveCalendarMonth(-1)}
+                                        className="h-7 w-7 flex items-center justify-center rounded-md border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
+                                        aria-label="이전 달"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onClick={() => moveCalendarMonth(1)}
+                                        className="h-7 w-7 flex items-center justify-center rounded-md border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
+                                        aria-label="다음 달"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onClick={resetCalendarFilter}
+                                        className="h-7 px-2.5 rounded-md border border-[var(--border-color)] text-xs text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--highlight-bg)] transition-colors"
+                                    >
+                                        전체 조회
+                                    </button>
+                                </div>
+                            </div>
 
-                        <div className="mt-2 text-xs text-[var(--text-secondary)]">
-                            {selectedDateKey
-                                ? `${formatDateKeyLabel(selectedDateKey)} 생성 회의만 표시 중 (${filtered.length}개)`
-                                : '날짜를 선택하면 해당 날짜에 생성된 회의만 표시됩니다.'}
-                        </div>
-                    </aside>
+                            <div className="grid grid-cols-7 gap-1 mb-1">
+                                {CALENDAR_WEEKDAYS.map((d) => (
+                                    <div key={d} className="h-7 flex items-center justify-center text-[11px] font-medium text-[var(--text-tertiary)]">
+                                        {d}
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="grid grid-cols-7 gap-1">
+                                {calendarDays.map(day => (
+                                    <button
+                                        key={day.key}
+                                        onClick={() => handleSelectCalendarDate(day.key, day.date)}
+                                        className={`h-10 rounded-md border text-xs transition-colors ${
+                                            selectedDateKey === day.key
+                                                ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]'
+                                                : day.inMonth
+                                                    ? 'border-transparent text-[var(--foreground)] hover:bg-[var(--highlight-bg)]'
+                                                    : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--highlight-bg)]'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-center gap-1">
+                                            <span className={`${day.isToday ? 'font-semibold underline decoration-[var(--accent-primary)] decoration-2 underline-offset-2' : ''}`}>
+                                                {day.day}
+                                            </span>
+                                            {day.count > 0 && (
+                                                <span className="text-[10px] text-[var(--accent-primary)] tabular-nums">({day.count})</span>
+                                            )}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="mt-2 text-xs text-[var(--text-secondary)]">
+                                {selectedDateKey
+                                    ? `${formatDateKeyLabel(selectedDateKey)} 생성 회의만 표시 중 (${filtered.length}개)`
+                                    : '날짜를 선택하면 해당 날짜에 생성된 회의만 표시됩니다.'}
+                            </div>
+                        </aside>
+
+                        {!isOwner && (
+                            <div className="border border-[var(--border-color)] rounded-lg bg-[var(--card-bg)] p-4">
+                                <button
+                                    onClick={() => setShowLeaveConfirm(true)}
+                                    className="w-full h-9 px-3 bg-[var(--card-bg)] hover:bg-[var(--highlight-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--foreground)] rounded-md text-sm font-medium transition-colors
+                                    hover:bg-red-500/80"
+                                >
+                                    그룹 나가기
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </main>
 
@@ -707,20 +693,6 @@ export default function FolderPage({ folderId }: FolderPageProps) {
                     loading={isDeleting}
                     onConfirm={confirmDelete}
                     onClose={() => !isDeleting && setShowDeleteConfirm(false)}
-                />
-            )}
-
-            {showFolderDeleteConfirm && (
-                <ConfirmModal
-                    icon="danger"
-                    title={`그룹 "${currentFolder?.name ?? ''}"을 삭제할까요?`}
-                    description="그룹 내 모든 회의실과 메모, 멤버가 함께 삭제되며 되돌릴 수 없습니다."
-                    confirmText="삭제"
-                    confirmVariant="danger"
-                    loading={isFolderActing}
-                    errorMessage={folderActionError}
-                    onConfirm={handleDeleteFolder}
-                    onClose={() => !isFolderActing && setShowFolderDeleteConfirm(false)}
                 />
             )}
 
